@@ -44,6 +44,8 @@ class Transpiler {
         return this.transpileEnumDeclaration(node);
       case PT.PROTOCOL_DECLARATION:
         return this.transpileProtocolDeclaration(node);
+      case PT.STRUCT_DECLARATION:
+        return this.transpileStructDeclaration(node);
       case PT.CLASS_DECLARATION:
         return this.transpileClassDeclaration(node);
       default:
@@ -111,7 +113,7 @@ class Transpiler {
   transpileGuard(node) {
     const condition = this.transpileExpression(node.condition);
     const body = this.transpileBlock(node.body);
-    return `if (!(${condition})) { ${body} return; }`;
+    return `if (!(${condition})) { ${body} }`;
   }
 
   transpileGuardLet(node) {
@@ -202,8 +204,35 @@ class Transpiler {
   transpileProtocolMethod(method) {
     const name = method.name.value;
     const params = method.parameters.map(this.transpileParameter.bind(this)).join(', ');
-    const returnType = method.returnType ? `: ${this.transpileType(method.returnType)}` : '';
-    return `${name}(${params})${returnType};`;
+    const returnType = this.emitTS && method.returnType ? `: ${this.transpileType(method.returnType)}` : '';
+    return `${name}(${params})${returnType} {}`;
+  }
+
+  transpileStructDeclaration(node) {
+    const name = node.name.value;
+    const inheritedTypes = node.inheritedTypes.map(type => type.value).join(', ');
+    const members = node.members.map(member => {
+      if (member.type === PT.VAR_DECLARATION) {
+        return this.transpileVarDeclaration(member, true);
+      } 
+      else if (member.type === PT.FUNCTION) {
+        return this.transpileMethod(member);
+      }
+    }).join('\n  ');
+
+    if (this.emitTS) {
+      return `interface ${name}${inheritedTypes ? ` extends ${inheritedTypes}` : ''} {
+  ${members}
+}`;
+    } else {
+      return `class ${name} { // ${inheritedTypes ? `implements ${inheritedTypes}` : ''}
+  constructor(params = {}) {
+    Object.assign(this, params);
+  }
+
+  ${members}
+}`;
+    }
   }
 
   transpileClassDeclaration(node) {

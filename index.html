@@ -6,30 +6,22 @@
     <title>SwiftScript Transpiler</title>
 
     <style>
-        #code {
-            background-color: #f0f0f0;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+        * {
+            box-sizing: border-box;
         }
-
-        #output {
+        
+        pre, textarea {
             background-color: #f0f0f0;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
+            width: 100%;
+
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
         }
     </style>
-</head>
-<body>
-    <h1>SwiftScript Transpiler</h1>
-    
-    <h2>Code</h2>
-    <pre id="code"></pre>
-
-    <h2>Output</h2>
-    <pre id="output"></pre>
-
     <script type="module">
         const originalLog = console.log;
         console.log = function(...args) {
@@ -42,9 +34,16 @@
         import Parser from './src/parser.js';
         import Transpiler from './src/transpiler.js';
 
-        async function runTranspilation() {
-            const response = await fetch('test.swift');
-            const sourceCode = await response.text();
+        async function runTranspilation(src, code) {
+            let sourceCode;
+
+            if (src) {
+                const response = await fetch(src);
+                sourceCode = await response.text();
+                document.getElementById('source').value = sourceCode;
+            } else {
+                sourceCode = code;
+            }
 
             const lexer = new Lexer(sourceCode);
             const tokens = lexer.tokenize();
@@ -55,12 +54,30 @@
             const transpiler = new Transpiler(ast);
             const output = transpiler.transpile();
 
-            document.getElementById('code').textContent = output;
+            document.getElementById('compilate').textContent = output;
 
             eval(output);
         }
 
-        window.onload = runTranspilation;
+        window.runTranspilation = runTranspilation;
     </script>
+</head>
+<body>
+    <h1>SwiftScript Transpiler</h1>
+
+    <h2>Source</h2>
+    <input type="text" id="sourceFile" value="test.swift">
+    <button onclick="runTranspilation(document.getElementById('sourceFile').value)">Fetch & Run</button>
+    <textarea id="source" rows="10" cols="50"></textarea>
+    <br>
+    <button onclick="runTranspilation(undefined, document.getElementById('source').value)">Run</button>
+    
+    <h2>Code</h2>
+    <pre id="compilate"></pre>
+
+    <h2>Output</h2>
+    <pre id="output"></pre>
+
+    
 </body>
 </html>

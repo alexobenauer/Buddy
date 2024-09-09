@@ -18,6 +18,7 @@ class Parser {
 
   declaration() {
     try {
+      if (this.match(TT.STRUCT)) return this.structDeclaration();
       if (this.match(TT.CLASS)) return this.classDeclaration();
       if (this.match(TT.VAR, TT.LET)) return this.varDeclaration();
       if (this.match(TT.FUNC)) return this.function('function');
@@ -28,6 +29,42 @@ class Parser {
       this.synchronize();
       return null;
     }
+  }
+
+  structDeclaration() {
+    const name = this.consume(TT.IDENTIFIER, 'Expect struct name.');
+    
+    let inheritedTypes = [];
+    if (this.match(TT.COLON)) {
+      do {
+        inheritedTypes.push(this.consume(TT.IDENTIFIER, 'Expect inherited type name.'));
+      } while (this.match(TT.COMMA));
+    }
+
+    this.consume(TT.LEFT_BRACE, "Expect '{' before struct body.");
+
+    const members = [];
+
+    while (!this.check(TT.RIGHT_BRACE) && !this.isAtEnd()) {
+      if (this.match(TT.INIT)) {
+        members.push(this.method('constructor'));
+      } else if (this.match(TT.FUNC)) {
+        members.push(this.method('method'));
+      } else if (this.match(TT.VAR, TT.LET)) {
+        members.push(this.varDeclaration());
+      } else {
+        throw this.error(this.peek(), "Expect method or property declaration in struct.");
+      }
+    }
+
+    this.consume(TT.RIGHT_BRACE, "Expect '}' after struct body.");
+
+    return {
+      type: PT.STRUCT_DECLARATION,
+      name,
+      inheritedTypes,
+      members
+    };
   }
 
   classDeclaration() {
@@ -87,7 +124,7 @@ class Parser {
 
     this.consume(TT.LEFT_BRACE, `Expect '{' before ${kind} body.`);
     const body = this.block();
-    return { name, parameters, returnType, body, isStatic, isOverride };
+    return { type: PT.FUNCTION, name, parameters, returnType, body, isStatic, isOverride };
   }
 
   varDeclaration() {
@@ -103,9 +140,9 @@ class Parser {
     if (this.match(TT.EQUAL)) {
       initializer = this.expression();
     } 
-    else if (constant) {
-      throw this.error(this.previous(), "Constant declarations must be initialized.");
-    }
+    // else if (constant) {
+    //   throw this.error(this.previous(), "Constant declarations must be initialized.");
+    // }
 
     this.match(TT.SEMICOLON);
 
@@ -238,9 +275,11 @@ class Parser {
     while (!this.check(TT.RIGHT_BRACE) && !this.isAtEnd()) {
       if (this.match(TT.VAR, TT.LET)) {
         members.push(this.protocolPropertyDeclaration());
-      } else if (this.match(TT.FUNC)) {
+      } 
+      else if (this.match(TT.FUNC)) {
         members.push(this.protocolMethodDeclaration());
-      } else {
+      } 
+      else {
         throw this.error(this.peek(), "Expect property or method declaration in protocol.");
       }
     }
@@ -381,7 +420,7 @@ class Parser {
     const value = this.expression();
     this.consume(TT.ELSE, "Expect 'else' after guard let condition.");
     this.consume(TT.LEFT_BRACE, "Expect '{' after guard let condition.");
-    const body = this.block();
+    const body = this.block(); // TODO: Require return in here
     return { type: PT.GUARD_LET, name, value, body };
   }
 
@@ -815,6 +854,7 @@ const ParserTypes = Object.freeze({
   GROUPING: 'Grouping',
   CLASS_DECLARATION: 'ClassDeclaration',
   SELF: 'Self',
+  STRUCT_DECLARATION: 'StructDeclaration',
 });
 
 const PT = ParserTypes;
