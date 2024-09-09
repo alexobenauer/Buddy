@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftScript Transpiler</title>
+
+    <style>
+        #code {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #output {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>SwiftScript Transpiler</h1>
+    
+    <h2>Code</h2>
+    <pre id="code"></pre>
+
+    <h2>Output</h2>
+    <pre id="output"></pre>
+
+    <script type="module">
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog(...args);
+            const output = document.getElementById('output');
+            output.textContent += args.join(' ') + '\n';
+        };
+
+        import Lexer from './src/lexer.js';
+        import Parser from './src/parser.js';
+        import Transpiler from './src/transpiler.js';
+
+        async function runTranspilation() {
+            const response = await fetch('test.swift');
+            const sourceCode = await response.text();
+
+            const lexer = new Lexer(sourceCode);
+            const tokens = lexer.tokenize();
+
+            const parser = new Parser(tokens);
+            const ast = parser.parse();
+
+            const transpiler = new Transpiler(ast);
+            const output = transpiler.transpile();
+
+            document.getElementById('code').textContent = output;
+
+            eval(output);
+        }
+
+        window.onload = runTranspilation;
+    </script>
+</body>
+</html>
