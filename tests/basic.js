@@ -1,9 +1,9 @@
 #!/usr/bin/env deno test
 
 import { assertEquals } from "https://deno.land/std/testing/asserts.ts";
-import Lexer from './src/lexer.js';
-import Parser from './src/parser.js';
-import Transpiler from './src/transpiler.js';
+import Lexer from '../src/lexer.js';
+import Parser, { PT } from '../src/parser.js';
+import Transpiler from '../src/transpiler.js';
 
 function transpile(sourceCode, emitTS = false) {
   const lexer = new Lexer(sourceCode);
@@ -63,4 +63,21 @@ Deno.test("Basic class declaration", () => {
   `;
   const result = transpile(input);
   assertEquals(normalize(result), normalize(expected));
+});
+
+// MARK: - Expressions
+// End-to-end tests for expressions
+
+Deno.test("Basic array literal", () => {
+  const input = "[1, 2, 3]";
+  const expected = [1, 2, 3];
+  const result = eval(transpile(input));
+  assertEquals(result, expected);
+});
+
+Deno.test("Basic dictionary literal", () => {
+  const input = "[a: 1, b: 2, c: 3]";
+  const expected = {a: 1, b: 2, c: 3};
+  const result = eval(transpile(input));
+  assertEquals(result, expected);
 });

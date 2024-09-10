@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwiftScript Transpiler</title>
+    <title>Buddy Transpiler</title>
 
     <style>
         * {
@@ -30,9 +30,9 @@
             output.textContent += args.join(' ') + '\n';
         };
 
-        import Lexer from './src/lexer.js';
-        import Parser from './src/parser.js';
-        import Transpiler from './src/transpiler.js';
+        import Lexer from '../src/lexer.js';
+        import Parser from '../src/parser.js';
+        import Transpiler from '../src/transpiler.js';
 
         async function runTranspilation(src, code) {
             let sourceCode;
@@ -63,7 +63,7 @@
     </script>
 </head>
 <body>
-    <h1>SwiftScript Transpiler</h1>
+    <h1>Buddy Transpiler</h1>
 
     <h2>Source</h2>
     <input type="text" id="sourceFile" value="test.swift">

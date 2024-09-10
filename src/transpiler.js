@@ -163,10 +163,6 @@ class Transpiler {
     return `return ${value};`;
   }
 
-  transpileExpressionStatement(node) {
-    return `${this.transpileExpression(node.expression)};`;
-  }
-
   transpileEnumDeclaration(node) {
     const name = node.name.value;
     const cases = node.cases.map(c => `${c.name.value} = '${c.name.value}'`).join(',\n  ');
@@ -275,6 +271,10 @@ class Transpiler {
     return `${staticKeyword}${name}(${params})${returnType} { ${body} }`;
   }
 
+  transpileExpressionStatement(node) {
+    return `${this.transpileExpression(node.expression)};`;
+  }
+
   transpileExpression(node) {
     switch (node.type) {
       case PT.ASSIGNMENT:
@@ -297,6 +297,10 @@ class Transpiler {
         return this.transpileIndex(node);
       case PT.LITERAL:
         return this.transpileLiteral(node);
+      case PT.ARRAY_LITERAL:
+        return this.transpileArray(node);
+      case PT.DICTIONARY_LITERAL:
+        return this.transpileDictionary(node);
       case PT.GROUPING:
         return this.transpileGrouping(node);
       case PT.SELF:
@@ -370,6 +374,16 @@ class Transpiler {
 
   transpileLiteral(node) {
     return JSON.stringify(node.value);
+  }
+
+  transpileArray(node) {
+    const elements = node.elements.map(this.transpileExpression.bind(this)).join(', ');
+    return `[${elements}]`;
+  }
+
+  transpileDictionary(node) {
+    const pairs = node.pairs.map(({key, value}) => `${this.transpileExpression(key)}: ${this.transpileExpression(value)}`).join(', ');
+    return `({ ${pairs} })`;
   }
 
   transpileGrouping(node) {

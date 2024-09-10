@@ -704,44 +704,58 @@ class Parser {
     }
 
     if (this.match(TT.LEFT_BRACKET)) {
-      return this.arrayLiteral();
-    }
-
-    if (this.match(TT.LEFT_BRACE)) {
-      return this.dictionaryLiteral();
+      return this.arrayOrDictionaryLiteral();
     }
 
     throw this.error(this.peek(), 'Expect expression.');
   }
 
-  arrayLiteral() {
-    const elements = [];
-    if (!this.check(TT.RIGHT_BRACKET)) {
-      do {
-        if (this.check(TT.RIGHT_BRACKET)) {
-          break;
-        }
-        elements.push(this.expression());
-      } while (this.match(TT.COMMA));
+  arrayOrDictionaryLiteral() {
+    if (this.match(TT.COLON)) {
+      this.consume(TT.RIGHT_BRACKET, "Expect ']' after empty dictionary literal.");
+      return { type: PT.DICTIONARY_LITERAL, pairs: [] };
+    }
+
+    if (this.match(TT.RIGHT_BRACKET)) {
+      return { type: PT.ARRAY_LITERAL, elements: [] };
+    }
+
+    const firstElement = this.expression();
+
+    if (this.match(TT.COLON)) {
+      return this.finishDictionaryLiteral(firstElement);
+    } else {
+      return this.finishArrayLiteral(firstElement);
+    }
+  }
+
+  finishArrayLiteral(firstElement) {
+    const elements = [firstElement];
+    while (this.match(TT.COMMA)) {
+      if (this.check(TT.RIGHT_BRACKET)) {
+        break;
+      }
+      elements.push(this.expression());
     }
     this.consume(TT.RIGHT_BRACKET, "Expect ']' after array elements.");
     return { type: PT.ARRAY_LITERAL, elements };
   }
 
-  dictionaryLiteral() {
+  finishDictionaryLiteral(firstKey) {
     const pairs = [];
-    if (!this.check(TT.RIGHT_BRACE)) {
-      do {
-        if (this.check(TT.RIGHT_BRACE)) {
-          break;
-        }
-        const key = this.expression();
-        this.consume(TT.COLON, "Expect ':' after dictionary key.");
-        const value = this.expression();
-        pairs.push({ key, value });
-      } while (this.match(TT.COMMA));
+    const firstValue = this.expression();
+    pairs.push({ key: firstKey, value: firstValue });
+
+    while (this.match(TT.COMMA)) {
+      if (this.check(TT.RIGHT_BRACKET)) {
+        break;
+      }
+      const key = this.expression();
+      this.consume(TT.COLON, "Expect ':' after dictionary key.");
+      const value = this.expression();
+      pairs.push({ key, value });
     }
-    this.consume(TT.RIGHT_BRACE, "Expect '}' after dictionary pairs.");
+    this.consume(TT.RIGHT_BRACKET, "Expect ']' after dictionary pairs.");
     return { type: PT.DICTIONARY_LITERAL, pairs };
   }
 
@@ -851,6 +865,8 @@ const ParserTypes = Object.freeze({
   GET: 'Get',
   INDEX: 'Index',
   LITERAL: 'Literal',
+  ARRAY_LITERAL: 'ArrayLiteral',
+  DICTIONARY_LITERAL: 'DictionaryLiteral',
   GROUPING: 'Grouping',
   CLASS_DECLARATION: 'ClassDeclaration',
   SELF: 'Self',

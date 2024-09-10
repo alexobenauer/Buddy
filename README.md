@@ -1,11 +1,13 @@
 **Ignore this repo. Nothing good can come from taking it seriously.**
 
-To run the transpiler, make `./src/swiftscript.js` executable and run it. It expects a command line argument of either `compile` or `interpret`, followed by a list of Swift files to compile or interpret. Pass `-debug` to see the tokens and AST. Pass `-ts` to output TypeScript instead of JavaScript. Deno must be installed. Example usage:
+Buddy is a Swift-like language for the browser and other JS contexts. It implements a subset of Swift’s core features, and extends it with a few improvements. It can be compiled into Javascript or Typescript in the browser, on the server, or from the command line.
+
+To run the transpiler, make `./src/buddy.js` executable and run it. It expects a command line argument of either `compile` or `interpret`, followed by a list of Swift files to compile or interpret. Pass `-debug` to see the tokens and AST. Pass `-ts` to output TypeScript instead of JavaScript. Deno must be installed. Example usage:
 
 ```bash
-./src/swiftscript.js compile test.swift
+./src/buddy.js compile src/test.swift
 ```
 
-To run the test suite, run `deno test test.ts`.
+To run the test suite, run `deno test tests/*`.
 
-To preview the website locally, run `vite` from the root directory.
+To preview a website locally, run `vite` from the root directory and navigate to `http://localhost:5173/examples/index.html`.
