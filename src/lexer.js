@@ -44,7 +44,6 @@ class Lexer {
       case ';': this.addToken(TT.SEMICOLON); break;
       case ':': this.addToken(TT.COLON); break;
       case ',': this.addToken(TT.COMMA); break;
-      case '.': this.addToken(TT.DOT); break;
       case '+': this.addToken(TT.PLUS); break;
       case '*': this.addToken(TT.STAR); break;
       case '/':
@@ -70,6 +69,22 @@ class Lexer {
           this.addToken(TT.SLASH);
         }
         break;
+      case '.':
+        if (this.match('.')) {
+          if (this.match('.')) {
+            this.addToken(TT.CLOSED_RANGE);
+          }
+          else if (this.match('<')) {
+            this.addToken(TT.HALF_OPEN_RANGE);
+          }
+          else {
+            this.addToken(TT.DOT);
+            this.addToken(TT.DOT);
+          }
+        } else {
+          this.addToken(TT.DOT);
+        }
+        break;
       case '=':
         this.addToken(this.match('=') ? TT.EQUAL_EQUAL : TT.EQUAL);
         break;
@@ -90,21 +105,13 @@ class Lexer {
         }
         break;
       case '?':
-        this.addToken(this.match('?') ? TT.DOUBLE_QUESTION : TT.QUESTION);
+        this.addToken(this.match('?') ? TT.QUESTION_QUESTION : TT.QUESTION);
         break;
       case '&':
-        if (this.match('&')) {
-          this.addToken(TT.AMPERSAND_AMPERSAND);
-        } else {
-          this.addToken(TT.AMPERSAND);
-        }
+        this.addToken(this.match('&') ? TT.AMPERSAND_AMPERSAND : TT.AMPERSAND);
         break;
       case '|':
-        if (this.match('|')) {
-          this.addToken(TT.PIPE_PIPE);
-        } else {
-          this.addToken(TT.PIPE);
-        }
+        this.addToken(this.match('|') ? TT.PIPE_PIPE : TT.PIPE);
         break;
       case '#': this.addToken(TT.HASH); break;
       case '@': this.addToken(TT.AT); break;
@@ -319,8 +326,14 @@ const TokenTypes = Object.freeze({
   COLON: "COLON",
   COMMA: "COMMA",
   DOT: "DOT",
+  CLOSED_RANGE: "CLOSED_RANGE",
+  HALF_OPEN_RANGE: "HALF_OPEN_RANGE",
   QUESTION: "QUESTION",
-  DOUBLE_QUESTION: "DOUBLE_QUESTION",
+  QUESTION_QUESTION: "QUESTION_QUESTION",
+  AMPERSAND: "AMPERSAND",
+  AMPERSAND_AMPERSAND: "AMPERSAND_AMPERSAND",
+  PIPE: "PIPE",
+  PIPE_PIPE: "PIPE_PIPE",
   SELF: "SELF",
 });
 
@@ -360,7 +373,7 @@ export const keywords = {
 };
 
 export default Lexer;
-export { TokenTypes, TT };
+export { TokenTypes, TT, Token };
 
 // Example usage
 // const input = `

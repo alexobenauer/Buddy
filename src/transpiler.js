@@ -165,11 +165,13 @@ class Transpiler {
 
   transpileEnumDeclaration(node) {
     const name = node.name.value;
-    const cases = node.cases.map(c => `${c.name.value} = '${c.name.value}'`).join(',\n  ');
-    if (!this.emitTS) {
-      return `const ${name} = Object.freeze({\n  ${cases}\n});`;
-    } else {
+    if (this.emitTS) {
+      const cases = node.cases.map(c => `${c.name.value} = '${c.name.value}'`).join(',\n  ');
       return `enum ${name} {\n  ${cases}\n}`;
+    } 
+    else {
+      const cases = node.cases.map(c => `${c.name.value}: '${c.name.value}'`).join(',\n  ');
+      return `const ${name} = Object.freeze({\n  ${cases}\n});`;
     }
   }
 
@@ -205,6 +207,7 @@ class Transpiler {
   }
 
   transpileStructDeclaration(node) {
+    // TODO: Need to adjust for JS's pass-by-reference behavior
     const name = node.name.value;
     const inheritedTypes = node.inheritedTypes.map(type => type.value).join(', ');
     const members = node.members.map(member => {
@@ -235,17 +238,12 @@ class Transpiler {
     const name = node.name.value;
     const superclass = node.superclass ? ` extends ${node.superclass.value}` : '';
     const properties = node.properties.map(n => this.transpileVarDeclaration(n, true)).join('\n  ');
+    const hasConstructor = node.methods.some(m => m.name === 'init');
+    const defaultConstructor = hasConstructor ? '' : 'constructor(params = {}) { Object.assign(this, params); }';
+
     const methods = node.methods.map(this.transpileMethod.bind(this)).join('\n\n  ');
 
-    // Add a default constructor if not present
-    const hasConstructor = node.methods.some(m => m.name === 'init');
-    const defaultConstructor = hasConstructor ? '' : '  constructor() {}\n\n';
-
-    return `class ${name}${superclass} {
-  ${properties}
-
-  ${defaultConstructor}${methods}
-}`;
+    return `class ${name}${superclass} {\n  ${properties}\n\n  ${defaultConstructor}\n\n${methods}\n}`;
   }
 
   transpileMethod(node) {
@@ -297,6 +295,8 @@ class Transpiler {
         return this.transpileIndex(node);
       case PT.LITERAL:
         return this.transpileLiteral(node);
+      case PT.NUMBER_LITERAL:
+        return this.transpileNumberLiteral(node);
       case PT.ARRAY_LITERAL:
         return this.transpileArray(node);
       case PT.DICTIONARY_LITERAL:
@@ -374,6 +374,10 @@ class Transpiler {
 
   transpileLiteral(node) {
     return JSON.stringify(node.value);
+  }
+
+  transpileNumberLiteral(node) {
+    return node.value;
   }
 
   transpileArray(node) {

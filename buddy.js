@@ -1,8 +1,8 @@
 #!/usr/bin/env deno run --allow-read --allow-write
 
-import Lexer from './lexer.js';
-import Parser from './parser.js';
-import Transpiler from './transpiler.js';
+import Lexer from './src/lexer.js';
+import Parser from './src/parser.js';
+import Transpiler from './src/transpiler.js';
 
 const args = Deno.args;
 const debug = args.includes('-debug');

@@ -46,13 +46,16 @@ class Parser {
     const members = [];
 
     while (!this.check(TT.RIGHT_BRACE) && !this.isAtEnd()) {
-      if (this.match(TT.INIT)) {
+      if (this.check(TT.INIT)) {
         members.push(this.method('constructor'));
-      } else if (this.match(TT.FUNC)) {
+      } 
+      else if (this.match(TT.FUNC)) {
         members.push(this.method('method'));
-      } else if (this.match(TT.VAR, TT.LET)) {
+      } 
+      else if (this.match(TT.VAR, TT.LET)) {
         members.push(this.varDeclaration());
-      } else {
+      } 
+      else {
         throw this.error(this.peek(), "Expect method or property declaration in struct.");
       }
     }
@@ -81,13 +84,16 @@ class Parser {
     const properties = [];
 
     while (!this.check(TT.RIGHT_BRACE) && !this.isAtEnd()) {
-      if (this.match(TT.INIT)) {
+      if (this.check(TT.INIT)) {
         methods.push(this.method('constructor'));
-      } else if (this.match(TT.FUNC)) {
+      } 
+      else if (this.match(TT.FUNC)) {
         methods.push(this.method('method'));
-      } else if (this.match(TT.VAR, TT.LET)) {
+      } 
+      else if (this.match(TT.VAR, TT.LET)) {
         properties.push(this.varDeclaration());
-      } else {
+      } 
+      else {
         throw this.error(this.peek(), "Expect method or property declaration in class.");
       }
     }
@@ -104,10 +110,10 @@ class Parser {
   }
 
   method(kind) {
-    const name = kind === 'constructor' ? 'init' : this.consume(TT.IDENTIFIER, `Expect ${kind} name.`);
     const isStatic = this.match(TT.STATIC);
     const isOverride = this.match(TT.OVERRIDE);
-    
+    const name = this.match(TT.INIT) ? 'init' : this.consume(TT.IDENTIFIER, `Expect ${kind} name.`);
+
     this.consume(TT.LEFT_PAREN, `Expect '(' after ${kind} name.`);
     const parameters = [];
     if (!this.check(TT.RIGHT_PAREN)) {
@@ -140,6 +146,7 @@ class Parser {
     if (this.match(TT.EQUAL)) {
       initializer = this.expression();
     } 
+    // TODO: This shouldn't error for let declarations in classes, unless if it isn't set in the initializer. Should do these checks in the semantic analyzer.
     // else if (constant) {
     //   throw this.error(this.previous(), "Constant declarations must be initialized.");
     // }
@@ -152,7 +159,7 @@ class Parser {
       varType: type,
       initializer,
       constant,
-      isOptional: type && type.isOptional
+      isOptional: (type && type.isOptional) || false
     };
   }
 
@@ -215,7 +222,26 @@ class Parser {
   }
 
   type() {
-    let type = this.consume(TT.IDENTIFIER, 'Expect type name.');
+    let type;
+
+    if (this.match(TT.LEFT_BRACKET)) {
+      if (this.checkNext(TT.COLON)) {
+        const keyType = this.type();
+        this.consume(TT.COLON, "Expect ':' after dictionary key type.");
+        const valueType = this.type();
+        this.consume(TT.RIGHT_BRACKET, "Expect ']' after dictionary value type.");
+        type = { type: PT.DICTIONARY_TYPE, keyType, valueType };
+      } 
+      else {
+        const elementType = this.type();
+        this.consume(TT.RIGHT_BRACKET, "Expect ']' after array type.");
+        type = { type: PT.ARRAY_TYPE, elementType };
+      }
+    }
+    else {
+      type = { type: PT.TYPE, name: this.consume(TT.IDENTIFIER, 'Expect type name.') };
+    }
+
     if (this.match(TT.QUESTION)) {
       type = { type: PT.OPTIONAL_TYPE, baseType: type };
     }
@@ -504,6 +530,7 @@ class Parser {
     while (!this.check(TT.RIGHT_BRACE) && !this.isAtEnd()) {
       statements.push(this.declaration());
     }
+
     this.consume(TT.RIGHT_BRACE, "Expect '}' after block.");
     return { statements };
   }
@@ -521,7 +548,7 @@ class Parser {
   }
 
   assignment() {
-    const expr = this.or();
+    const expr = this.coalescing();
 
     if (this.match(TT.EQUAL)) {
       const equals = this.previous();
@@ -532,6 +559,18 @@ class Parser {
       }
 
       this.error(equals, `Invalid assignment target (${expr.type}).`);
+    }
+
+    return expr;
+  }
+
+  coalescing() {
+    let expr = this.or();
+
+    while (this.match(TT.QUESTION_QUESTION)) {
+      const operator = this.previous();
+      const right = this.or(); 
+      expr = { type: PT.BINARY, left: expr, operator, right };
     }
 
     return expr;
@@ -574,9 +613,21 @@ class Parser {
   }
 
   comparison() {
-    let expr = this.term();
+    let expr = this.range();
 
     while (this.match(TT.GREATER, TT.GREATER_EQUAL, TT.LESS, TT.LESS_EQUAL)) {
+      const operator = this.previous();
+      const right = this.range();
+      expr = { type: PT.BINARY, left: expr, operator, right };
+    }
+
+    return expr;
+  }
+
+  range() {
+    let expr = this.term();
+
+    while (this.match(TT.CLOSED_RANGE, TT.HALF_OPEN_RANGE)) {
       const operator = this.previous();
       const right = this.term();
       expr = { type: PT.BINARY, left: expr, operator, right };
@@ -584,7 +635,7 @@ class Parser {
 
     return expr;
   }
-  
+
   term() {
     let expr = this.factor();
 
@@ -689,8 +740,12 @@ class Parser {
     if (this.match(TT.NIL)) return { type: PT.LITERAL, value: null };
     if (this.match(TT.SELF)) return { type: PT.SELF };
 
-    if (this.match(TT.NUMBER, TT.STRING)) {
+    if (this.match(TT.STRING)) {
       return { type: PT.LITERAL, value: this.previous().value };
+    }
+
+    if (this.match(TT.NUMBER)) {
+      return { type: PT.NUMBER_LITERAL, value: this.previous().value };
     }
 
     if (this.match(TT.IDENTIFIER)) {
@@ -773,6 +828,7 @@ class Parser {
 
   consume(type, message) {
     if (this.check(type)) return this.advance();
+    console.trace();
     throw this.error(this.peek(), message);
   }
 
@@ -839,7 +895,10 @@ class Parser {
 
 const ParserTypes = Object.freeze({
   VAR_DECLARATION: 'VarDeclaration',
+  TYPE: 'Type',
   OPTIONAL_TYPE: 'OptionalType',
+  ARRAY_TYPE: 'ArrayType',
+  DICTIONARY_TYPE: 'DictionaryType',
   FUNCTION: 'Function',
   PARAMETER: 'Parameter',
   ENUM_DECLARATION: 'EnumDeclaration',
@@ -865,6 +924,7 @@ const ParserTypes = Object.freeze({
   GET: 'Get',
   INDEX: 'Index',
   LITERAL: 'Literal',
+  NUMBER_LITERAL: 'NumberLiteral',
   ARRAY_LITERAL: 'ArrayLiteral',
   DICTIONARY_LITERAL: 'DictionaryLiteral',
   GROUPING: 'Grouping',
