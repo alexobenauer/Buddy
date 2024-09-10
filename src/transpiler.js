@@ -1,3 +1,4 @@
+import { TT } from "./lexer.js";
 import { PT } from "./parser.js";
 
 class Transpiler {
@@ -22,6 +23,8 @@ class Transpiler {
         return this.transpileVarDeclaration(node);
       case PT.FUNCTION:
         return this.transpileFunction(node);
+      case PT.TYPEALIAS:
+        return this.transpileTypealias(node);
       case PT.IF:
         return this.transpileIf(node);
       case PT.IF_LET:
@@ -94,6 +97,12 @@ class Transpiler {
     return `${name}${type}${defaultValue}`;
   }
 
+  transpileTypealias(node) {
+    const name = node.name.value;
+    const value = this.transpileType(node.value);
+    return `const ${name} = ${value};`;
+  }
+
   transpileIf(node) {
     const condition = this.transpileExpression(node.condition);
     const thenBranch = this.transpileBlock(node.thenBranch);
@@ -133,8 +142,9 @@ class Transpiler {
     if (caseNode.isDefault) {
       return `default: { \n${this.transpileBlock(caseNode.body)} \n}`;
     }
-    const pattern = this.transpileExpression(caseNode.pattern);
-    return `case ${pattern}: { \n${this.transpileBlock(caseNode.body)} \n}`;
+    const expressions = caseNode.expressions.map(this.transpileExpression.bind(this)).join(':\n  case ');
+    const statements = caseNode.statements.map(this.transpileStatement.bind(this)).join('\n');
+    return `  case ${expressions}: { \n${statements} \n break; }`;
   }
 
   transpileWhile(node) {
@@ -283,6 +293,8 @@ class Transpiler {
         return this.transpileLogical(node);
       case PT.BINARY:
         return this.transpileBinary(node);
+      case PT.BINARY_RANGE:
+        return this.transpileBinaryRange(node);
       case PT.UNARY:
         return this.transpileUnary(node);
       case PT.CALL:
@@ -313,7 +325,15 @@ class Transpiler {
   transpileAssignment(node) {
     const target = this.transpileExpression(node.target);
     const value = this.transpileExpression(node.value);
-    return `${target} = ${value}`;
+    if (node.operator === TT.PLUS_EQUAL) {
+      return `${target} += ${value}`;
+    } 
+    else if (node.operator === TT.MINUS_EQUAL) {
+      return `${target} -= ${value}`;
+    } 
+    else {
+      return `${target} = ${value}`;
+    }
   }
 
   transpileVariable(node) {
@@ -330,6 +350,20 @@ class Transpiler {
     const left = this.transpileExpression(node.left);
     const right = this.transpileExpression(node.right);
     return `${left} ${node.operator.value} ${right}`;
+  }
+
+  transpileBinaryRange(node) {
+    const left = this.transpileExpression(node.left);
+    const right = this.transpileExpression(node.right);
+
+    switch (node.operator.type) {
+      case TT.CLOSED_RANGE:
+        return `.slice(${left}, ${right} + 1)`;
+      case TT.HALF_OPEN_RANGE:
+        return `.slice(${left}, ${right})`;
+      default:
+        return `${left} ${node.operator.value} ${right}`;
+    }
   }
 
   transpileUnary(node) {
@@ -350,7 +384,7 @@ class Transpiler {
     // Wrap arguments in an object for named parameters
     const wrappedArgs = node.arguments.some(arg => arg.label) ? `{ ${args} }` : args;
     
-    const isClass = callee.charAt(0) === callee.charAt(0).toUpperCase(); // TODO: We want to  do this during a semantic analysis pass; checking capitalization just for now
+    const isClass = callee.charAt(0) === callee.charAt(0).toUpperCase(); // TODO: We want to do this during a semantic analysis pass; checking capitalization just for now
     return `${isClass ? 'new ' : ''}${callee}(${wrappedArgs})`;
   }
 
@@ -367,9 +401,16 @@ class Transpiler {
   }
 
   transpileIndex(node) {
-    const object = this.transpileExpression(node.object);
-    const index = this.transpileExpression(node.index);
-    return `${object}[${index}]`;
+    if (node.index.type === PT.BINARY_RANGE) {
+      const object = this.transpileExpression(node.object);
+      const index = this.transpileExpression(node.index);
+      return `${object}${index}`;
+    }
+    else {
+      const object = this.transpileExpression(node.object);
+      const index = this.transpileExpression(node.index);
+      return `${object}[${index}]`;
+    }
   }
 
   transpileLiteral(node) {
@@ -400,6 +441,24 @@ class Transpiler {
   }
 
   transpileType(type) {
+    if (type.type === PT.TYPE) {
+      return this._transpileType(type.name);
+    }
+    else if (type.type === PT.ARRAY_TYPE) {
+      return `${this.transpileType(type.elementType)}[]`;
+    }
+    else if (type.type === PT.DICTIONARY_TYPE) {
+      return `{ [key: ${this.transpileType(type.keyType)}]: ${this.transpileType(type.valueType)} }`;
+    }
+    else if (type.type === PT.OPTIONAL_TYPE) {
+      return `${this.transpileType(type.baseType)} | null | undefined`;
+    }
+    else {
+      return this._transpileType(type.value);
+    }
+  }
+
+  _transpileType(type) {
     switch (type.value) {
       case 'Int':
       case 'Double':
@@ -447,13 +506,26 @@ class Transpiler {
 }
 
 const runtime = `
-function print(value) {
-  console.log(value);
+function print(...args) {
+  console.log(...args);
 }
 
 function range(start, end) {
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 }
+
+Array.prototype.append = function(element) {
+  this.push(element);
+  return this;
+};
+
+Object.defineProperty(String.prototype, 'count', {
+  get: function() {
+    return this.length;
+  },
+  enumerable: false,
+  configurable: true
+});
 `;
 
 export default Transpiler;

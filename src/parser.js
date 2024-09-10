@@ -24,6 +24,7 @@ class Parser {
       if (this.match(TT.FUNC)) return this.function('function');
       if (this.match(TT.ENUM)) return this.enumDeclaration();
       if (this.match(TT.PROTOCOL)) return this.protocolDeclaration();
+      if (this.match(TT.TYPEALIAS)) return this.typealiasDeclaration();
       return this.statement();
     } catch (error) {
       this.synchronize();
@@ -377,6 +378,13 @@ class Parser {
     };
   }
 
+  typealiasDeclaration() {
+    const name = this.consume(TT.IDENTIFIER, 'Expect typealias name.');
+    this.consume(TT.EQUAL, "Expect '=' after typealias name.");
+    const type = this.type();
+    return { type: PT.TYPEALIAS, name, value: type };
+  }
+
   // MARK: - Statements
 
   statement() {
@@ -454,7 +462,7 @@ class Parser {
     const expression = this.expression();
     this.consume(TT.LEFT_BRACE, "Expect '{' after switch expression.");
 
-    const cases = [];
+    let cases = [];
     let defaultCase = null;
 
     while (!this.check(TT.RIGHT_BRACE) && !this.isAtEnd()) {
@@ -550,12 +558,12 @@ class Parser {
   assignment() {
     const expr = this.coalescing();
 
-    if (this.match(TT.EQUAL)) {
+    if (this.match(TT.EQUAL, TT.PLUS_EQUAL, TT.MINUS_EQUAL)) {
       const equals = this.previous();
       const value = this.assignment();
 
       if (expr.type === PT.VARIABLE || expr.type === PT.INDEX || expr.type === PT.GET || expr.type === PT.OPTIONAL_CHAINING) {
-        return { type: PT.ASSIGNMENT, target: expr, value };
+        return { type: PT.ASSIGNMENT, target: expr, value, operator: equals.type };
       }
 
       this.error(equals, `Invalid assignment target (${expr.type}).`);
@@ -630,7 +638,7 @@ class Parser {
     while (this.match(TT.CLOSED_RANGE, TT.HALF_OPEN_RANGE)) {
       const operator = this.previous();
       const right = this.term();
-      expr = { type: PT.BINARY, left: expr, operator, right };
+      expr = { type: PT.BINARY_RANGE, left: expr, operator, right };
     }
 
     return expr;
@@ -663,8 +671,8 @@ class Parser {
   unary() {
     if (this.match(TT.BANG, TT.MINUS)) {
       const operator = this.previous();
-      const right = this.unary();
-      return { type: PT.UNARY, operator, right };
+      const operand = this.unary();
+      return { type: PT.UNARY, operator, operand };
     }
 
     return this.call();
@@ -918,6 +926,7 @@ const ParserTypes = Object.freeze({
   VARIABLE: 'Variable',
   LOGICAL: 'Logical',
   BINARY: 'Binary',
+  BINARY_RANGE: 'BinaryRange',
   UNARY: 'Unary',
   CALL: 'Call',
   OPTIONAL_CHAINING: 'OptionalChaining',
@@ -931,6 +940,7 @@ const ParserTypes = Object.freeze({
   CLASS_DECLARATION: 'ClassDeclaration',
   SELF: 'Self',
   STRUCT_DECLARATION: 'StructDeclaration',
+  TYPEALIAS: 'TypeAlias',
 });
 
 const PT = ParserTypes;

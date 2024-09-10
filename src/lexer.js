@@ -28,7 +28,7 @@ class Lexer {
       this.scanToken();
     }
 
-    this.tokens.push(new Token('EOF', '', this.line, this.column));
+    this.tokens.push(new Token(TT.EOF, '', this.line, this.column));
     return this.tokens;
   }
 
@@ -44,7 +44,14 @@ class Lexer {
       case ';': this.addToken(TT.SEMICOLON); break;
       case ':': this.addToken(TT.COLON); break;
       case ',': this.addToken(TT.COMMA); break;
-      case '+': this.addToken(TT.PLUS); break;
+      case '+':
+        if (this.match('=')) {
+          this.addToken(TT.PLUS_EQUAL);
+        } 
+        else {
+          this.addToken(TT.PLUS);
+        }
+        break;
       case '*': this.addToken(TT.STAR); break;
       case '/':
         if (this.match('/')) {
@@ -89,18 +96,22 @@ class Lexer {
         this.addToken(this.match('=') ? TT.EQUAL_EQUAL : TT.EQUAL);
         break;
       case '!':
-        this.addToken(this.match('=') ? TT.NOT_EQUAL : TT.NOT);
+        this.addToken(this.match('=') ? TT.BANG_EQUAL : TT.BANG);
         break;
       case '<':
-        this.addToken(this.match('=') ? TT.LESS_THAN_OR_EQUAL_TO : TT.LESS_THAN);
+        this.addToken(this.match('=') ? TT.LESS_EQUAL : TT.LESS);
         break;
       case '>':
-        this.addToken(this.match('=') ? TT.GREATER_THAN_OR_EQUAL_TO : TT.GREATER_THAN);
+        this.addToken(this.match('=') ? TT.GREATER_EQUAL : TT.GREATER);
         break;
       case '-':
-        if (this.match('>')) {
+        if (this.match('=')) {
+          this.addToken(TT.MINUS_EQUAL);
+        } 
+        else if (this.match('>')) {
           this.addToken(TT.RIGHT_ARROW);
-        } else {
+        } 
+        else {
           this.addToken(TT.MINUS);
         }
         break;
@@ -298,6 +309,7 @@ const TokenTypes = Object.freeze({
   PRIVATE: "PRIVATE",
   PUBLIC: "PUBLIC",
   INTERNAL: "INTERNAL",
+  TYPEALIAS: "TYPEALIAS",
 
   PLUS: "PLUS",
   MINUS: "MINUS",
@@ -305,15 +317,12 @@ const TokenTypes = Object.freeze({
   DIVIDE: "DIVIDE",
   EQUAL: "EQUAL",
   EQUAL_EQUAL: "EQUAL_EQUAL",
-  NOT_EQUAL: "NOT_EQUAL",
-  GREATER_THAN: "GREATER_THAN",
-  LESS_THAN: "LESS_THAN",
-  GREATER_THAN_OR_EQUAL_TO: "GREATER_THAN_OR_EQUAL_TO",
-  LESS_THAN_OR_EQUAL_TO: "LESS_THAN_OR_EQUAL_TO",
-  AND: "AND",
-  OR: "OR",
-  NOT: "NOT",
-  POW: "POW",
+  BANG: "BANG",
+  BANG_EQUAL: "BANG_EQUAL",
+  GREATER: "GREATER",
+  LESS: "LESS",
+  GREATER_EQUAL: "GREATER_EQUAL",
+  LESS_EQUAL: "LESS_EQUAL",
   RIGHT_ARROW: "RIGHT_ARROW",
 
   LEFT_PAREN: "LEFT_PAREN",
@@ -335,6 +344,8 @@ const TokenTypes = Object.freeze({
   PIPE: "PIPE",
   PIPE_PIPE: "PIPE_PIPE",
   SELF: "SELF",
+  PLUS_EQUAL: "PLUS_EQUAL",
+  MINUS_EQUAL: "MINUS_EQUAL",
 });
 
 const TT = TokenTypes;
@@ -370,6 +381,7 @@ export const keywords = {
   "public": TT.PUBLIC,
   "internal": TT.INTERNAL,
   "self": TT.SELF,
+  "typealias": TT.TYPEALIAS,
 };
 
 export default Lexer;

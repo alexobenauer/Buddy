@@ -6,18 +6,19 @@ import Transpiler from './src/transpiler.js';
 
 const args = Deno.args;
 const debug = args.includes('-debug');
+const verbose = args.includes('-verbose');
 const emitTS = args.includes('-ts');
 const command = args[0];
 
 if (args.length < 2 || (command !== 'compile' && command !== 'interpret')) {
-  console.log('Usage: buddy.js [compile|interpret] [-debug] <filename1> <filename2> ...');
+  console.log('Usage: buddy.js [compile|interpret] [-debug] [-verbose] <filename1> <filename2> ...');
 } else {
-  const fileContents = await Promise.all(args.slice(1).filter(arg => arg !== '-debug' && arg !== '-ts').map(async (filename) => {
+  const fileContents = await Promise.all(args.slice(1).filter(arg => arg !== '-debug' && arg !== '-ts' && arg !== '-verbose').map(async (filename) => {
     return await Deno.readTextFile(filename);
   }));
   const combinedContents = fileContents.join('\n');
 
-  const output = transpile(combinedContents, emitTS, debug);
+  const output = transpile(combinedContents, emitTS, debug, verbose);
 
   if (command === 'compile') {
     await Deno.mkdir('_build', { recursive: true });
@@ -29,7 +30,7 @@ if (args.length < 2 || (command !== 'compile' && command !== 'interpret')) {
   }
 }
 
-function transpile(sourceCode, emitTS = false, debug = false) {
+function transpile(sourceCode, emitTS = false, debug = false, verbose = false) {
   if (debug) console.log("\n=== TOKENS ===");
 
   const lexer = new Lexer(sourceCode);
@@ -42,6 +43,7 @@ function transpile(sourceCode, emitTS = false, debug = false) {
   const parser = new Parser(tokens);
   const ast = parser.parse();
 
+  if (debug && verbose) console.log(JSON.stringify(ast, null, 2));
   if (debug) console.log(ast);
 
   if (debug) console.log("\n=== JS ===");
