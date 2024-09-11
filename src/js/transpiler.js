@@ -8,13 +8,13 @@ class Transpiler {
   }
 
   transpile({ excludeRuntime = false } = {}) {
-    try {
+    // try {
       return (excludeRuntime ? '' : runtime + '\n\n') + this.ast.map(node => this.transpileNode(node)).join('\n');
-    } catch (error) {
-      console.error('Error during transpilation:');
-      console.error(error.stack);
-      throw error; // Re-throw the error after logging the stack trace
-    }
+    // } catch (error) {
+    //   console.error('Error during transpilation:');
+    //   console.error(error.stack);
+    //   throw error; // Re-throw the error after logging the stack trace
+    // }
   }
 
   transpileNode(node) {

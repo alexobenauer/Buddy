@@ -1,9 +1,9 @@
 #!/usr/bin/env deno test
 
 import { assertEquals } from "https://deno.land/std/testing/asserts.ts";
-import Lexer from '../src/lexer.js';
-import Parser, { PT } from '../src/parser.js';
-import Transpiler from '../src/transpiler.js';
+import Lexer from '../src/js/lexer.js';
+import Parser, { PT } from '../src/js/parser.js';
+import Transpiler from '../src/js/transpiler.js';
 
 function transpile(sourceCode, emitTS = false) {
   const lexer = new Lexer(sourceCode);
