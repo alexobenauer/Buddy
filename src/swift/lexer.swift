@@ -16,208 +16,313 @@ class Lexer {
     }
     
     func addToken(type: TokenType, literal: String? = nil) {
-        let text = String(source[source.index(source.startIndex, offsetBy: start)..<source.index(source.startIndex, offsetBy: current)])
-        tokens.append(Token(type: type, value: literal ?? text, line: line, column: column - text.count))
+        let text = substr(self.source, start: self.start, end: self.current)
+        self.tokens.append(
+          Token(
+            type: type,
+            value: literal ?? text,
+            line: self.line,
+            column: self.column - text.count
+          )
+        )
     }
     
     func tokenize() -> [Token] {
-        while !isAtEnd() {
-            start = current
-            scanToken()
+        while !self.isAtEnd() {
+            self.start = self.current
+            self.scanToken()
         }
         
-        tokens.append(Token(type: .EOF, value: "", line: line, column: column))
-        return tokens
+        self.tokens.append(
+          Token(
+            type: TokenType.EOF,
+            value: "",
+            line: self.line,
+            column: self.column
+          )
+        )
+        return self.tokens
     }
     
     func scanToken() {
-        let c = advance()
+        let c = self.advance()
         switch c {
-        case "(": addToken(type: .LEFT_PAREN)
-        case ")": addToken(type: .RIGHT_PAREN)
-        case "{": addToken(type: .LEFT_BRACE)
-        case "}": addToken(type: .RIGHT_BRACE)
-        case "[": addToken(type: .LEFT_BRACKET)
-        case "]": addToken(type: .RIGHT_BRACKET)
-        case ";": addToken(type: .SEMICOLON)
-        case ":": addToken(type: .COLON)
-        case ",": addToken(type: .COMMA)
+        case "(": self.addToken(type: TokenType.LEFT_PAREN)
+        case ")": self.addToken(type: TokenType.RIGHT_PAREN)
+        case "{": self.addToken(type: TokenType.LEFT_BRACE)
+        case "}": self.addToken(type: TokenType.RIGHT_BRACE)
+        case "[": self.addToken(type: TokenType.LEFT_BRACKET)
+        case "]": self.addToken(type: TokenType.RIGHT_BRACKET)
+        case ";": self.addToken(type: TokenType.SEMICOLON)
+        case ":": self.addToken(type: TokenType.COLON)
+        case ",": self.addToken(type: TokenType.COMMA)
         case "+":
-            if match("=") {
-                addToken(type: .PLUS_EQUAL)
+            if self.match("=") {
+                self.addToken(type: TokenType.PLUS_EQUAL)
             } else {
-                addToken(type: .PLUS)
+                self.addToken(type: TokenType.PLUS)
             }
-        case "*": addToken(type: .STAR)
+        case "*": self.addToken(type: TokenType.STAR)
         case "/":
-            if match("/") {
+            if self.match("/") {
                 // Single-line comment goes until the end of the line
-                while peek() != "\n" && !isAtEnd() { advance() }
-            } else if match("*") {
+                while self.peek() != "\n" && !self.isAtEnd() { self.advance() }
+            } else if self.match("*") {
                 // Multi-line comment
-                while !isAtEnd() {
-                    if peek() == "*" && peekNext() == "/" {
-                        advance() // Consume the *
-                        advance() // Consume the /
+                while !self.isAtEnd() {
+                    if self.peek() == "*" && self.peekNext() == "/" {
+                        self.advance() // Consume the *
+                        self.advance() // Consume the /
                         break
                     }
-                    if peek() == "\n" {
-                        line += 1
+                    if self.peek() == "\n" {
+                        self.line += 1
                     }
-                    advance()
+                    self.advance()
                 }
             } else {
-                addToken(type: .SLASH)
+                self.addToken(type: TokenType.SLASH)
             }
         case ".":
-            if match(".") {
-                if match(".") {
-                    addToken(type: .DOT_DOT_DOT)
-                } else if match("<") {
-                    addToken(type: .DOT_DOT_LESS)
+            if self.match(".") {
+                if self.match(".") {
+                    self.addToken(type: TokenType.DOT_DOT_DOT)
+                } else if self.match("<") {
+                    self.addToken(type: TokenType.DOT_DOT_LESS)
                 } else {
-                    addToken(type: .DOT)
-                    addToken(type: .DOT)
+                    self.addToken(type: TokenType.DOT)
+                    self.addToken(type: TokenType.DOT)
                 }
             } else {
-                addToken(type: .DOT)
+                self.addToken(type: TokenType.DOT)
             }
-        case "=": addToken(type: match("=") ? .EQUAL_EQUAL : .EQUAL)
-        case "!": addToken(type: match("=") ? .BANG_EQUAL : .BANG)
-        case "<": addToken(type: match("=") ? .LESS_EQUAL : .LESS)
-        case ">": addToken(type: match("=") ? .GREATER_EQUAL : .GREATER)
-        case "-":
-            if match("=") {
-                addToken(type: .MINUS_EQUAL)
-            } else if match(">") {
-                addToken(type: .RIGHT_ARROW)
+        case "=":
+            if self.match("=") {
+                self.addToken(type: TokenType.EQUAL_EQUAL)
             } else {
-                addToken(type: .MINUS)
+                self.addToken(type: TokenType.EQUAL)
             }
-        case "?": addToken(type: match("?") ? .QUESTION_QUESTION : .QUESTION)
-        case "&": addToken(type: match("&") ? .AMPERSAND_AMPERSAND : .AMPERSAND)
-        case "|": addToken(type: match("|") ? .PIPE_PIPE : .PIPE)
-        case "#": addToken(type: .HASH)
-        case "@": addToken(type: .AT)
-        case "\\": addToken(type: .BACKSLASH)
-        case "^": addToken(type: .CARET)
-        case "~": addToken(type: .TILDE)
+        case "!":
+            if self.match("=") {
+                self.addToken(type: TokenType.BANG_EQUAL)
+            } else {
+                self.addToken(type: TokenType.BANG)
+            }
+        case "<":
+            if self.match("=") {
+                self.addToken(type: TokenType.LESS_EQUAL)
+            } else {
+                self.addToken(type: TokenType.LESS)
+            }
+        case ">":
+            if self.match("=") {
+                self.addToken(type: TokenType.GREATER_EQUAL)
+            } else {
+                self.addToken(type: TokenType.GREATER)
+            }
+        case "-":
+            if self.match("=") {
+                self.addToken(type: TokenType.MINUS_EQUAL)
+            } else if self.match(">") {
+                self.addToken(type: TokenType.RIGHT_ARROW)
+            } else {
+                self.addToken(type: TokenType.MINUS)
+            }
+        case "?":
+            if self.match("?") {
+                self.addToken(type: TokenType.QUESTION_QUESTION)
+            } else {
+                self.addToken(type: TokenType.QUESTION)
+            }
+        case "&":
+            if self.match("&") {
+                self.addToken(type: TokenType.AMPERSAND_AMPERSAND)
+            } else {
+                self.addToken(type: TokenType.AMPERSAND)
+            }
+        case "|":
+            if self.match("|") {
+                self.addToken(type: TokenType.PIPE_PIPE)
+            } else {
+                self.addToken(type: TokenType.PIPE)
+            }
+        case "#": self.addToken(type: TokenType.HASH)
+        case "@": self.addToken(type: TokenType.AT)
+        case "\\": self.addToken(type: TokenType.BACKSLASH)
+        case "~": self.addToken(type: TokenType.TILDE)
         case " ", "\r", "\t": break // Ignore whitespace
         case "\n":
-            line += 1
-            column = 1
-        case "\"": string()
-        case "'": character()
-        default:
-            if isDigit(c) {
-                number()
-            } else if isAlpha(c) {
-                identifier()
+            self.line += 1
+            self.column = 1
+
+        // TODO: Handle multi-line string literals
+        case "\"":
+            if self.peek() == "\"" && self.peekNext() == "\"" {
+                self.advance()
+                self.advance()
+                self.multiLineString()
             } else {
-                fatalError("Unexpected character: \(c) at line \(line), column \(column)")
+                self.string()
+            }
+        case "'": self.character()
+        default:
+            if self.isDigit(c) {
+                self.number()
+            } else if self.isAlpha(c) {
+                self.identifier()
+            } else {
+                fatalError("Unexpected character: \(c) at line \(self.line), column \(self.column)")
             }
         }
     }
     
     func string() {
-        while peek() != "\"" && !isAtEnd() {
-            if peek() == "\n" {
-                line += 1
-                column = 1
+        while self.peek() != "\"" && !self.isAtEnd() {
+            if self.peek() == "\n" {
+                self.line += 1
+                self.column = 1
             }
-            if peek() == "\\" && peekNext() == "\"" {
-                advance() // Consume the backslash
+            if self.peek() == "\\" {
+                if self.peek() == "\"" && self.peekNext() == "\"" && self.peekNextNext() == "\"" {
+                    self.advance()
+                    self.advance()
+                    self.advance()
+                }
+                else {
+                    self.advance()
+                }
             }
-            advance()
+            self.advance()
         }
         
-        if isAtEnd() {
-            fatalError("Unterminated string at line \(line), column \(column)")
+        if self.isAtEnd() {
+            fatalError("Unterminated string at line \(self.line), column \(self.column)")
         }
         
         // The closing "
-        advance()
+        self.advance()
         
         // Trim the surrounding quotes
-        let value = String(source[source.index(source.startIndex, offsetBy: start + 1)..<source.index(source.startIndex, offsetBy: current - 1)])
-        addToken(type: .STRING, literal: value)
+        let value = substr(self.source, start: self.start + 1, end: self.current - 1)
+        self.addToken(type: TokenType.STRING, literal: value)
+    }
+
+    func multiLineString() {
+        while !(self.peek() == "\"" && self.peekNext() == "\"" && self.peekNextNext() == "\"") && !self.isAtEnd() {
+            if self.peek() == "\n" {
+                self.line += 1
+                self.column = 1
+            }
+            if self.peek() == "\\" {
+                if self.peek() == "\"" && self.peekNext() == "\"" && self.peekNextNext() == "\"" {
+                    self.advance()
+                    self.advance()
+                    self.advance()
+                }
+                else {
+                    self.advance()
+                }
+            }
+            self.advance()
+        }
+
+        if self.isAtEnd() {
+            fatalError("Unterminated string at line \(self.line), column \(self.column)")
+        }
+
+        // The closing quotes
+        self.advance()
+        self.advance()
+        self.advance()
+
+        let value = substr(self.source, start: self.start + 3, end: self.current - 3)
+        self.addToken(type: TokenType.STRING_MULTILINE, literal: value)
     }
     
     func character() {
-        if isAtEnd() || peek() == "\n" {
-            fatalError("Unterminated character literal at line \(line), column \(column)")
+        if self.isAtEnd() || self.peek() == "\n" {
+            fatalError("Unterminated character literal at line \(self.line), column \(self.column)")
         }
-        advance() // Consume the character
-        if peek() != "'" {
-            fatalError("Invalid character literal at line \(line), column \(column)")
+        self.advance() // Consume the character
+        if self.peek() != "'" {
+            fatalError("Invalid character literal at line \(self.line), column \(self.column)")
         }
-        advance() // Consume the closing '
+        self.advance() // Consume the closing '
         
-        let value = String(source[source.index(source.startIndex, offsetBy: start + 1)..<source.index(source.startIndex, offsetBy: current - 1)])
-        addToken(type: .CHARACTER, literal: value)
+        let value = substr(self.source, start: self.start + 1, end: self.current - 1)
+        self.addToken(type: TokenType.CHARACTER, literal: value)
     }
     
     func number() {
-        while isDigit(peek()) { advance() }
+        var isDouble = false
+        while self.isDigit(self.peek()) { self.advance() }
         
         // Look for a fractional part
-        if peek() == "." && isDigit(peekNext()) {
+        if self.peek() == "." && self.isDigit(self.peekNext()) {
             // Consume the "."
-            advance()
-            
-            while isDigit(peek()) { advance() }
+            self.advance()
+            isDouble = true
+
+            while self.isDigit(self.peek()) { self.advance() }
         }
         
         // Look for an exponent part
-        if peek().lowercased() == "e" {
-            advance()
-            if peek() == "+" || peek() == "-" { advance() }
-            if !isDigit(peek()) {
-                fatalError("Invalid number format at line \(line), column \(column)")
-            }
-            while isDigit(peek()) { advance() }
-        }
+        // if peek().lowercased() == "e" {
+        //     advance()
+        //     if peek() == "+" || peek() == "-" { advance() }
+        //     if !isDigit(peek()) {
+        //         fatalError("Invalid number format at line \(line), column \(column)")
+        //     }
+        //     while isDigit(peek()) { advance() }
+        // }
         
-        let value = String(source[source.index(source.startIndex, offsetBy: start)..<source.index(source.startIndex, offsetBy: current)])
-        addToken(type: .NUMBER, literal: value)
+        let value = substr(self.source, start: self.start, end: self.current)
+        var type = TokenType.INT
+        if isDouble { type = TokenType.DOUBLE }
+        self.addToken(type: type, literal: value)
     }
     
     func identifier() {
-        while isAlphaNumeric(peek()) { advance() }
+        while self.isAlphaNumeric(self.peek()) { self.advance() }
         
-        let text = String(source[source.index(source.startIndex, offsetBy: start)..<source.index(source.startIndex, offsetBy: current)])
-        let type = keywords[text] ?? .IDENTIFIER
-        addToken(type: type)
+        let text = substr(self.source, start: self.start, end: self.current)
+        let type = keywords[text] ?? TokenType.IDENTIFIER
+        self.addToken(type: type)
     }
     
     func isAtEnd() -> Bool {
-        return current >= source.count
+        return self.current >= self.source.count
     }
     
-    @discardableResult
+//    @discardableResult
     func advance() -> Character {
-        let char = source[source.index(source.startIndex, offsetBy: current)]
-        current += 1
-        column += 1
-        return char
+        let char = charAt(self.source, index: self.current)
+        self.current += 1
+        self.column += 1
+        return char!
     }
     
     func peek() -> Character {
-        if isAtEnd() { return "\0" }
-        return source[source.index(source.startIndex, offsetBy: current)]
+        if self.isAtEnd() { return "\0" }
+        return charAt(self.source, index: self.current)!
     }
     
     func peekNext() -> Character {
-        if current + 1 >= source.count { return "\0" }
-        return source[source.index(source.startIndex, offsetBy: current + 1)]
+        if self.current + 1 >= self.source.count { return "\0" }
+        return charAt(self.source, index: self.current + 1)!
+    }
+
+    func peekNextNext() -> Character {
+        if self.current + 2 >= self.source.count { return "\0" }
+        return charAt(self.source, index: self.current + 2)!
     }
     
     func match(_ expected: Character) -> Bool {
-        if isAtEnd() { return false }
-        if source[source.index(source.startIndex, offsetBy: current)] != expected { return false }
+        if self.isAtEnd() { return false }
+        if charAt(self.source, index: self.current) != expected { return false }
         
-        current += 1
-        column += 1
+        self.current += 1
+        self.column += 1
         return true
     }
     
@@ -232,6 +337,6 @@ class Lexer {
     }
     
     func isAlphaNumeric(_ c: Character) -> Bool {
-        return isAlpha(c) || isDigit(c)
+        return self.isAlpha(c) || self.isDigit(c)
     }
 }

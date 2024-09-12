@@ -75,11 +75,26 @@ class Parser {
             if match(TokenType.INIT) {
                members.append(try function(.initializer))
             } 
-            else if match(TokenType.FUNC) {
-               members.append(try function(.method))
-            } 
             else if match(TokenType.VAR, TokenType.LET) {
                members.append(try varDeclaration())
+            }
+            else if match(TokenType.FUNC) {
+               members.append(try function(.method))
+            }
+            else if match(TokenType.STRUCT) {
+                members.append(try structDeclaration())
+            }
+            else if match(TokenType.CLASS) {
+                members.append(try classDeclaration())
+            }
+            else if match(TokenType.ENUM) {
+                members.append(try enumDeclaration())
+            }
+            else if match(TokenType.PROTOCOL) {
+                members.append(try protocolDeclaration())
+            }
+            else if match(TokenType.TYPEALIAS) {
+                members.append(try typealiasDeclaration())
             } 
             else {
                 throw error(peek(), "Expect method or property declaration in struct.")
@@ -166,7 +181,7 @@ class Parser {
         var isVariadic: Bool = false
         var defaultValue: ASTNode?
 
-        if allowNamelessParams && !check(TokenType.IDENTIFIER) {
+        if allowNamelessParams && check(TokenType.IDENTIFIER) && (checkNext(TokenType.RIGHT_PAREN) || checkNext(TokenType.COMMA) ) {
             // Handle nameless parameter (only type)
             let type = try typeIdentifier()
             return Parameter(externalName: nil, internalName: Token(type: .IDENTIFIER, value: "_", line: 0, column: 0), type: type, isVariadic: false, defaultValue: nil)
@@ -216,7 +231,7 @@ class Parser {
         var type: TypeIdentifier
 
         if match(TokenType.LEFT_BRACKET) {
-            if match(TokenType.COLON) {
+            if checkNext(TokenType.COLON) {
                 let keyType = try typeIdentifier()
                 try consume(TokenType.COLON, "Expect ':' after dictionary key type.")
                 let valueType = try typeIdentifier()
@@ -245,20 +260,23 @@ class Parser {
         var cases: [EnumCase] = []
         while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
             try consume(TokenType.CASE, "Expect 'case' before enum case name.")
-            let caseName = try consume(TokenType.IDENTIFIER, "Expect enum case name.")
+            
+            repeat {
+                let caseName = try consume(TokenType.IDENTIFIER, "Expect enum case name.")
 
-            var rawValue: ASTNode? = nil
-            var associatedValues: [Parameter] = []
+                var rawValue: ASTNode? = nil
+                var associatedValues: [Parameter] = []
 
-            if match(TokenType.EQUAL) {
-                rawValue = try expression()
-            } 
-            else if match(TokenType.LEFT_PAREN) {
-                associatedValues = try parameterList(allowNamelessParams: true)
-                try consume(TokenType.RIGHT_PAREN, "Expect ')' after associated value(s).")
-            }
+                if match(TokenType.EQUAL) {
+                    rawValue = try expression()
+                } 
+                else if match(TokenType.LEFT_PAREN) {
+                    associatedValues = try parameterList(allowNamelessParams: true)
+                    try consume(TokenType.RIGHT_PAREN, "Expect ')' after associated value(s).")
+                }
 
-            cases.append(EnumCase(name: caseName, rawValue: rawValue, associatedValues: associatedValues))
+                cases.append(EnumCase(name: caseName, rawValue: rawValue, associatedValues: associatedValues))
+            } while match(TokenType.COMMA)
         }
 
         try consume(TokenType.RIGHT_BRACE, "Expect '}' after enum cases.")
@@ -365,6 +383,9 @@ class Parser {
         if match(TokenType.WHILE) { return try whileStatement() }
         if match(TokenType.REPEAT) { return try repeatStatement() }
         if match(TokenType.RETURN) { return try returnStatement() }
+        if match(TokenType.BREAK) { return try breakStatement() }
+        if match(TokenType.CONTINUE) { return try continueStatement() }
+        if match(TokenType.INDIRECT) { return try blankStatement() }
         if match(TokenType.LEFT_BRACE) { return try block() }
         return try expressionStatement()
     }
@@ -378,9 +399,10 @@ class Parser {
         let condition = try expression()
         if parens { try consume(TokenType.RIGHT_PAREN, "Expect matching ')' after if condition.") }
 
+        try consume(TokenType.LEFT_BRACE, "Expect '{' after if condition.")
         let thenBranch = try block()
         
-        let elseBranch: ASTNode? = match(TokenType.ELSE) ? try block() : nil
+        let elseBranch: ASTNode? = match(TokenType.ELSE) ? try statement() : nil
 
         return IfStatement(
             condition: condition, 
@@ -401,7 +423,8 @@ class Parser {
 
         try consume(TokenType.LEFT_BRACE, "Expect '{' after if let condition.")
         let thenBranch = try block()
-        let elseBranch: ASTNode? = match(TokenType.ELSE) ? try block() : nil
+
+        let elseBranch: ASTNode? = match(TokenType.ELSE) ? try statement() : nil
 
         return IfLetStatement(
             name: name, 
@@ -518,13 +541,15 @@ class Parser {
     }
 
     func breakStatement() throws -> ASTNode {
-        try consume(TokenType.BREAK, "Expect 'break' keyword.")
         return BreakStatement()
     }
 
     func continueStatement() throws -> ASTNode {
-        try consume(TokenType.CONTINUE, "Expect 'continue' keyword.")
         return ContinueStatement()
+    }
+
+    func blankStatement() throws -> ASTNode {
+        return BlankStatement()
     }
 
     func block() throws -> BlockStatement {
@@ -689,9 +714,9 @@ class Parser {
                 try consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.")
                 expr = IndexExpression(object: expr, index: index)
             } 
-            else if match(TokenType.QUESTION) {
-                let object = expr
-                expr = OptionalChainingExpression(object: object)
+            else if match(TokenType.QUESTION) || match(TokenType.BANG) {
+                let forceUnwrap = previous().type == TokenType.BANG
+                expr = OptionalChainingExpression(object: expr, forceUnwrap: forceUnwrap)
 
                 if match(TokenType.LEFT_PAREN) {
                     expr = try finishCall(expr, isOptional: true)
@@ -705,10 +730,10 @@ class Parser {
                     try consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.")
                     expr = IndexExpression(object: expr, index: index, isOptional: true)
                 } 
-                else {
+                else if !forceUnwrap {
                     throw error(peek(), "Expect property, subscript, or method call after '?'.")
                 }
-            } 
+            }
             else {
                 break
             }
@@ -745,9 +770,22 @@ class Parser {
             return StringLiteralExpression(value: previous().value) 
         }
 
-        if match(TokenType.NUMBER) { 
+        if match(TokenType.STRING_MULTILINE) { 
+            return StringLiteralExpression(value: previous().value, isMultiLine: true) 
+        }
+
+        if match(TokenType.INT) { 
+            if let value = Int(previous().value) {
+                return IntLiteralExpression(value: value)
+            }
+            else {
+                throw error(previous(), "Invalid number literal.")
+            }
+        }
+        
+        if match(TokenType.DOUBLE) { 
             if let value = Double(previous().value) {
-                return NumberLiteralExpression(value: value)
+                return DoubleLiteralExpression(value: value)
             }
             else {
                 throw error(previous(), "Invalid number literal.")
@@ -908,3 +946,4 @@ class Parser {
 // TODO: Add force unwrapping to the parser
 // TODO: Add as to the parser
 // TODO: Add @discardableResult
+// TODO: Differentiate method names based on parameters so you can overload

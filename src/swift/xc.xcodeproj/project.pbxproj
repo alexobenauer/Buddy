@@ -10,9 +10,14 @@
 		32BF49E92C90A9A200F29C35 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF49E82C90A9A200F29C35 /* main.swift */; };
 		32BF49F22C90A9E600F29C35 /* lexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF49F12C90A9E600F29C35 /* lexer.swift */; };
 		32BF49F42C90D0D000F29C35 /* parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF49F32C90D0D000F29C35 /* parser.swift */; };
-		32BF49F82C910F5B00F29C35 /* resolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF49F72C910F5B00F29C35 /* resolver.swift */; };
 		32BF49FA2C910F6300F29C35 /* transpiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF49F92C910F6300F29C35 /* transpiler.swift */; };
 		32BF49FC2C9112E200F29C35 /* datatypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF49FB2C9112E200F29C35 /* datatypes.swift */; };
+		32BF4A012C91917800F29C35 /* docs.swift in CopyFiles */ = {isa = PBXBuildFile; fileRef = 32BF49FE2C91905500F29C35 /* docs.swift */; };
+		32BF4A022C9191B500F29C35 /* datatypes.swift in CopyFiles */ = {isa = PBXBuildFile; fileRef = 32BF49FB2C9112E200F29C35 /* datatypes.swift */; };
+		32BF4A032C9191B500F29C35 /* lexer.swift in CopyFiles */ = {isa = PBXBuildFile; fileRef = 32BF49F12C90A9E600F29C35 /* lexer.swift */; };
+		32BF4A042C9191B500F29C35 /* parser.swift in CopyFiles */ = {isa = PBXBuildFile; fileRef = 32BF49F32C90D0D000F29C35 /* parser.swift */; };
+		32BF4A062C9191B500F29C35 /* transpiler.swift in CopyFiles */ = {isa = PBXBuildFile; fileRef = 32BF49F92C910F6300F29C35 /* transpiler.swift */; };
+		32BF4A082C91F40500F29C35 /* commonlib.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BF4A072C91F40500F29C35 /* commonlib.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,6 +30,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 		};
+		32BF49FD2C91903500F29C35 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				32BF4A022C9191B500F29C35 /* datatypes.swift in CopyFiles */,
+				32BF4A032C9191B500F29C35 /* lexer.swift in CopyFiles */,
+				32BF4A042C9191B500F29C35 /* parser.swift in CopyFiles */,
+				32BF4A062C9191B500F29C35 /* transpiler.swift in CopyFiles */,
+				32BF4A012C91917800F29C35 /* docs.swift in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +54,8 @@
 		32BF49F72C910F5B00F29C35 /* resolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = resolver.swift; sourceTree = "<group>"; };
 		32BF49F92C910F6300F29C35 /* transpiler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = transpiler.swift; sourceTree = "<group>"; };
 		32BF49FB2C9112E200F29C35 /* datatypes.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = datatypes.swift; sourceTree = "<group>"; };
+		32BF49FE2C91905500F29C35 /* docs.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = docs.swift; sourceTree = "<group>"; };
+		32BF4A072C91F40500F29C35 /* commonlib.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = commonlib.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,6 +73,8 @@
 			isa = PBXGroup;
 			children = (
 				32BF49E82C90A9A200F29C35 /* main.swift */,
+				32BF49FE2C91905500F29C35 /* docs.swift */,
+				32BF4A072C91F40500F29C35 /* commonlib.swift */,
 				32BF49FB2C9112E200F29C35 /* datatypes.swift */,
 				32BF49F12C90A9E600F29C35 /* lexer.swift */,
 				32BF49F32C90D0D000F29C35 /* parser.swift */,
@@ -79,6 +102,7 @@
 				32BF49E12C90A9A200F29C35 /* Sources */,
 				32BF49E22C90A9A200F29C35 /* Frameworks */,
 				32BF49E32C90A9A200F29C35 /* CopyFiles */,
+				32BF49FD2C91903500F29C35 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -131,8 +155,8 @@
 				32BF49FC2C9112E200F29C35 /* datatypes.swift in Sources */,
 				32BF49F42C90D0D000F29C35 /* parser.swift in Sources */,
 				32BF49F22C90A9E600F29C35 /* lexer.swift in Sources */,
+				32BF4A082C91F40500F29C35 /* commonlib.swift in Sources */,
 				32BF49E92C90A9A200F29C35 /* main.swift in Sources */,
-				32BF49F82C910F5B00F29C35 /* resolver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

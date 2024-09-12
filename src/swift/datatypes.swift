@@ -1,9 +1,9 @@
-enum TokenType: String {
-    case EOF, NUMBER, STRING, CHARACTER, IDENTIFIER
+enum TokenType {
+    case EOF, INT, DOUBLE, STRING, STRING_MULTILINE, CHARACTER, IDENTIFIER
     
     case IF, ELSE, GUARD, SWITCH, CASE, DEFAULT, FOR, IN, REPEAT, WHILE, VAR, LET, FUNC, RETURN, BREAK, CONTINUE
     case THROWS, THROW, DO, TRY, CATCH
-    case STRUCT, ENUM, PROTOCOL, EXTENSION, NIL, TRUE, FALSE, CLASS, INIT, DEINIT
+    case STRUCT, ENUM, INDIRECT, PROTOCOL, EXTENSION, NIL, TRUE, FALSE, CLASS, INIT, DEINIT
     case STATIC, FINAL, PRIVATE, PUBLIC, INTERNAL, TYPEALIAS
     case GET, SET
     
@@ -15,50 +15,51 @@ enum TokenType: String {
     case QUESTION, QUESTION_QUESTION, AMPERSAND, AMPERSAND_AMPERSAND, PIPE, PIPE_PIPE
     case SELF, PLUS_EQUAL, MINUS_EQUAL
     
-    case HASH, AT, BACKSLASH, CARET, TILDE, SLASH
+    case HASH, AT, BACKSLASH, TILDE, SLASH
 }
 
 let keywords: [String: TokenType] = [
-    "if": .IF,
-    "else": .ELSE,
-    "guard": .GUARD,
-    "switch": .SWITCH,
-    "case": .CASE,
-    "default": .DEFAULT,
-    "for": .FOR,
-    "in": .IN,
-    "repeat": .REPEAT,
-    "while": .WHILE,
-    "break": .BREAK,
-    "continue": .CONTINUE,
-    "var": .VAR,
-    "let": .LET,
-    "func": .FUNC,
-    "return": .RETURN,
-    "throws": .THROWS,
-    "throw": .THROW,
-    "do": .DO,
-    "try": .TRY,
-    "catch": .CATCH,
-    "struct": .STRUCT,
-    "enum": .ENUM,
-    "protocol": .PROTOCOL,
-    "extension": .EXTENSION,
-    "nil": .NIL,
-    "true": .TRUE,
-    "false": .FALSE,
-    "class": .CLASS,
-    "init": .INIT,
-    "deinit": .DEINIT,
-    "static": .STATIC,
-    "final": .FINAL,
-    "private": .PRIVATE,
-    "public": .PUBLIC,
-    "internal": .INTERNAL,
-    "self": .SELF,
-    "typealias": .TYPEALIAS,
-    "get": .GET,
-    "set": .SET
+    "if":       TokenType.IF,
+    "else":     TokenType.ELSE,
+    "guard":    TokenType.GUARD,
+    "switch":   TokenType.SWITCH,
+    "case":     TokenType.CASE,
+    "default":  TokenType.DEFAULT,
+    "for":      TokenType.FOR,
+    "in":       TokenType.IN,
+    "repeat":   TokenType.REPEAT,
+    "while":    TokenType.WHILE,
+    "break":    TokenType.BREAK,
+    "continue": TokenType.CONTINUE,
+    "var":      TokenType.VAR,
+    "let":      TokenType.LET,
+    "func":     TokenType.FUNC,
+    "return":   TokenType.RETURN,
+    "throws":   TokenType.THROWS,
+    "throw":    TokenType.THROW,
+    "do":       TokenType.DO,
+    "try":      TokenType.TRY,
+    "catch":    TokenType.CATCH,
+    "struct":   TokenType.STRUCT,
+    "enum":     TokenType.ENUM,
+    "indirect": TokenType.INDIRECT,
+    "protocol": TokenType.PROTOCOL,
+    "extension": TokenType.EXTENSION,
+    "nil":      TokenType.NIL,
+    "true":     TokenType.TRUE,
+    "false":    TokenType.FALSE,
+    "class":    TokenType.CLASS,
+    "init":     TokenType.INIT,
+    "deinit":   TokenType.DEINIT,
+    "static":   TokenType.STATIC,
+    "final":    TokenType.FINAL,
+    "private":  TokenType.PRIVATE,
+    "public":   TokenType.PUBLIC,
+    "internal": TokenType.INTERNAL,
+    "self":     TokenType.SELF,
+    "typealias": TokenType.TYPEALIAS,
+    "get":      TokenType.GET,
+    "set":      TokenType.SET
 ]
 
 struct Token {
@@ -82,14 +83,14 @@ struct ParserError: Error {
 struct VarDeclaration: ASTNode {
     let name: Token
     let type: TypeIdentifier?
-    let initializer: ASTNode?
+    var initializer: ASTNode?
     let isConstant: Bool
 }
 
 struct StructDeclaration: ASTNode {
     let name: Token
     let inheritedTypes: [Token]
-    let members: [ASTNode]
+    var members: [ASTNode]
 }
 
 struct ClassDeclaration: ASTNode {
@@ -224,6 +225,8 @@ struct BreakStatement: ASTNode {}
 
 struct ContinueStatement: ASTNode {}
 
+struct BlankStatement: ASTNode {}
+
 struct BlockStatement: ASTNode {
     let statements: [ASTNode]
 }
@@ -270,6 +273,7 @@ struct CallExpression: ASTNode {
     let callee: ASTNode
     let arguments: [Argument]
     var isOptional: Bool = false
+    var isMember: Bool = false // if true, then this call is a member of a class or struct; if false, then this call is a standalone function call
 }
 
 struct GetExpression: ASTNode {
@@ -286,6 +290,7 @@ struct IndexExpression: ASTNode {
 
 struct OptionalChainingExpression: ASTNode {
     let object: ASTNode
+    var forceUnwrap: Bool = false
 }
 
 struct LiteralExpression: ASTNode {
@@ -294,9 +299,14 @@ struct LiteralExpression: ASTNode {
 
 struct StringLiteralExpression: ASTNode {
     let value: String
+    var isMultiLine: Bool = false
 }
 
-struct NumberLiteralExpression: ASTNode {
+struct IntLiteralExpression: ASTNode {
+    let value: Int
+}
+
+struct DoubleLiteralExpression: ASTNode {
     let value: Double
 }
 
@@ -304,6 +314,7 @@ struct SelfExpression: ASTNode {}
 
 struct VariableExpression: ASTNode {
     let name: Token
+    var isMember: Bool = false // if true, then this variable is a member of a class or struct; if false, then this variable is a local or global variable
 }
 
 struct GroupingExpression: ASTNode {
