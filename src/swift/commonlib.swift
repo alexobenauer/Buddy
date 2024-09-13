@@ -1,22 +1,4 @@
 let runtime = libraryJS + """
-function stringify(params) {
-    const { _: arg } = params;
-    return JSON.stringify(arg);
-}
-
-//function print(...args) {
-//  console.log(...args);
-//}
-
-function print(params) {
-    const { _: arg } = params; // TODO: Multi-arg support
-    console.log(arg);
-}
-
-function range(start, end) {
-  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-}
-
 Array.prototype.append = function(params) {
   const { _: element } = params;
   this.push(element);
@@ -30,8 +12,48 @@ Object.defineProperty(String.prototype, 'count', {
   enumerable: false,
   configurable: true
 });
-""";
 
+function range(start, end) {
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+}
+
+function tryOptional(fn) {
+    try {
+        return fn();
+    } catch {
+        return null;
+    }
+}
+
+function tryForce(fn) {
+    try {
+        return fn();
+    } catch {
+        throw new Error("Fatal error: force try failed with error: " + error);
+    }
+}
+"""
+
+// Above functions are used by the code emitted from the transpiler
+
+// Below functions are available to user Swift code, providing both JS and Swift implementations so the transpiler can be built in Swift
+
+let libraryJS = [substrJS, charAtJS].joined(separator: "\n") + """
+
+function stringify(params) {
+    const { _: arg } = params;
+    return JSON.stringify(arg);
+}
+
+//function print(...args) {
+//  console.log(...args);
+//}
+
+function print(params) {
+    const { _: arg } = params; // TODO: Multi-arg support
+    console.log(arg);
+}
+""";
 
 func substr(_ str: String, start: Int, end: Int) -> String {
     guard start >= 0, end >= start, end <= str.count else {
@@ -55,8 +77,8 @@ function substr(params) {
 }
 """
 
-func charAt(_ str: String, index: Int) -> Character? {
-    guard index >= 0, index < str.count else {
+func charAt(_ str: String, index: Int, stringLength: Int? = 0) -> Character? {
+    guard index >= 0, index < (stringLength ?? str.count) else {
         return nil  // Return nil for invalid index
     }
     
@@ -85,5 +107,3 @@ function charAt(params) {
 //     return str.repeat(count);
 // }
 // """
-
-let libraryJS = [substrJS, charAtJS].joined(separator: "\n")

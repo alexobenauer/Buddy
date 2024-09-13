@@ -1,5 +1,6 @@
 class Lexer {
     let source: String
+    let sourceLength: Int
     var tokens: [Token]
     var start: Int
     var current: Int
@@ -8,6 +9,7 @@ class Lexer {
     
     init(source: String) {
         self.source = source
+        self.sourceLength = source.count
         self.tokens = []
         self.start = 0
         self.current = 0
@@ -22,7 +24,8 @@ class Lexer {
             type: type,
             value: literal ?? text,
             line: self.line,
-            column: self.column - text.count
+            column: self.column - text.count,
+            endOfLine: self.peek() == "\n"
           )
         )
     }
@@ -38,7 +41,8 @@ class Lexer {
             type: TokenType.EOF,
             value: "",
             line: self.line,
-            column: self.column
+            column: self.column,
+            endOfLine: true
           )
         )
         return self.tokens
@@ -105,8 +109,12 @@ class Lexer {
         case "!":
             if self.match("=") {
                 self.addToken(type: TokenType.BANG_EQUAL)
-            } else {
+            } 
+            else if self.peekPreviousPrevious() == " " || self.peekPreviousPrevious() == "\n" || self.peekPreviousPrevious() == "\r" || self.peekPreviousPrevious() == "\t" {
                 self.addToken(type: TokenType.BANG)
+            }
+            else {
+                self.addToken(type: TokenType.ATTACHED_BANG)
             }
         case "<":
             if self.match("=") {
@@ -131,8 +139,12 @@ class Lexer {
         case "?":
             if self.match("?") {
                 self.addToken(type: TokenType.QUESTION_QUESTION)
-            } else {
+            }
+            else if self.peekPreviousPrevious() == " " || self.peekPreviousPrevious() == "\n" || self.peekPreviousPrevious() == "\r" || self.peekPreviousPrevious() == "\t" {
                 self.addToken(type: TokenType.QUESTION)
+            }
+            else {
+                self.addToken(type: TokenType.ATTACHED_QUESTION)
             }
         case "&":
             if self.match("&") {
@@ -150,6 +162,7 @@ class Lexer {
         case "@": self.addToken(type: TokenType.AT)
         case "\\": self.addToken(type: TokenType.BACKSLASH)
         case "~": self.addToken(type: TokenType.TILDE)
+        case "$": self.addToken(type: TokenType.DOLLAR)
         case " ", "\r", "\t": break // Ignore whitespace
         case "\n":
             self.line += 1
@@ -291,12 +304,12 @@ class Lexer {
     }
     
     func isAtEnd() -> Bool {
-        return self.current >= self.source.count
+        return self.current >= self.sourceLength
     }
     
-//    @discardableResult
+    @discardableResult
     func advance() -> Character {
-        let char = charAt(self.source, index: self.current)
+        let char = charAt(self.source, index: self.current, stringLength: self.sourceLength)
         self.current += 1
         self.column += 1
         return char!
@@ -304,22 +317,32 @@ class Lexer {
     
     func peek() -> Character {
         if self.isAtEnd() { return "\0" }
-        return charAt(self.source, index: self.current)!
+        return charAt(self.source, index: self.current, stringLength: self.sourceLength)!
+    }
+
+    func peekPrevious() -> Character {
+        if self.current - 1 < 0 { return "\0" }
+        return charAt(self.source, index: self.current - 1, stringLength: self.sourceLength)!
+    }
+
+    func peekPreviousPrevious() -> Character {
+        if self.current - 2 < 0 { return "\0" }
+        return charAt(self.source, index: self.current - 2, stringLength: self.sourceLength)!
     }
     
     func peekNext() -> Character {
-        if self.current + 1 >= self.source.count { return "\0" }
-        return charAt(self.source, index: self.current + 1)!
+        if self.current + 1 >= self.sourceLength { return "\0" }
+        return charAt(self.source, index: self.current + 1, stringLength: self.sourceLength)!
     }
 
     func peekNextNext() -> Character {
-        if self.current + 2 >= self.source.count { return "\0" }
-        return charAt(self.source, index: self.current + 2)!
+        if self.current + 2 >= self.sourceLength { return "\0" }
+        return charAt(self.source, index: self.current + 2, stringLength: self.sourceLength)!
     }
     
     func match(_ expected: Character) -> Bool {
         if self.isAtEnd() { return false }
-        if charAt(self.source, index: self.current) != expected { return false }
+        if charAt(self.source, index: self.current, stringLength: self.sourceLength) != expected { return false }
         
         self.current += 1
         self.column += 1

@@ -5,17 +5,18 @@ enum TokenType {
     case THROWS, THROW, DO, TRY, CATCH
     case STRUCT, ENUM, INDIRECT, PROTOCOL, EXTENSION, NIL, TRUE, FALSE, CLASS, INIT, DEINIT
     case STATIC, FINAL, PRIVATE, PUBLIC, INTERNAL, TYPEALIAS
+    case AS, IS
     case GET, SET
     
-    case PLUS, MINUS, STAR, DIVIDE, EQUAL, EQUAL_EQUAL, BANG, BANG_EQUAL
+    case PLUS, MINUS, STAR, DIVIDE, EQUAL, EQUAL_EQUAL, BANG, ATTACHED_BANG, BANG_EQUAL
     case GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, RIGHT_ARROW
     
     case LEFT_PAREN, RIGHT_PAREN, LEFT_BRACKET, RIGHT_BRACKET, LEFT_BRACE, RIGHT_BRACE
     case SEMICOLON, COLON, COMMA, DOT, DOT_DOT_DOT, DOT_DOT_LESS
-    case QUESTION, QUESTION_QUESTION, AMPERSAND, AMPERSAND_AMPERSAND, PIPE, PIPE_PIPE
+    case QUESTION, ATTACHED_QUESTION, QUESTION_QUESTION, AMPERSAND, AMPERSAND_AMPERSAND, PIPE, PIPE_PIPE
     case SELF, PLUS_EQUAL, MINUS_EQUAL
     
-    case HASH, AT, BACKSLASH, TILDE, SLASH
+    case HASH, AT, BACKSLASH, TILDE, SLASH, DOLLAR
 }
 
 let keywords: [String: TokenType] = [
@@ -45,6 +46,8 @@ let keywords: [String: TokenType] = [
     "indirect": TokenType.INDIRECT,
     "protocol": TokenType.PROTOCOL,
     "extension": TokenType.EXTENSION,
+    "as":       TokenType.AS,
+    "is":       TokenType.IS,
     "nil":      TokenType.NIL,
     "true":     TokenType.TRUE,
     "false":    TokenType.FALSE,
@@ -67,6 +70,7 @@ struct Token {
     let value: String
     let line: Int
     let column: Int
+    let endOfLine: Bool
 }
 
 protocol ASTNode {}
@@ -80,11 +84,17 @@ struct ParserError: Error {
     }
 }
 
+struct Attribute: ASTNode {
+    let name: Token
+    let arguments: [ASTNode]
+}
+
 struct VarDeclaration: ASTNode {
     let name: Token
     let type: TypeIdentifier?
     var initializer: ASTNode?
     let isConstant: Bool
+    let isPrivate: Bool
 }
 
 struct StructDeclaration: ASTNode {
@@ -97,13 +107,16 @@ struct ClassDeclaration: ASTNode {
     let name: Token
     let inheritedTypes: [Token]
     let methods: [FunctionDeclaration]
-    let properties: [ASTNode]
+    let properties: [ASTNode]    
 }
 
 struct FunctionDeclaration: ASTNode {
     let name: Token
     let kind: Kind
+    let attributes: [Attribute]
     let isStatic: Bool
+    let isPrivate: Bool
+    let canThrow: Bool
     let parameters: [Parameter]
     let returnType: TypeIdentifier?
     let body: BlockStatement
@@ -124,7 +137,7 @@ struct Parameter {
 }
 
 indirect enum TypeIdentifier {
-    case identifier(Token)
+    case identifier(String)
     case array(TypeIdentifier)
     case dictionary(TypeIdentifier, TypeIdentifier)
     case optional(TypeIdentifier)
@@ -164,6 +177,12 @@ struct ProtocolMethodDeclaration: ASTNode {
 struct TypealiasDeclaration: ASTNode {
     let name: Token
     let type: TypeIdentifier
+}
+
+struct TernaryExpression: ASTNode {
+    let condition: ASTNode
+    let thenBranch: ASTNode
+    let elseBranch: ASTNode
 }
 
 struct IfStatement: ASTNode {
@@ -227,8 +246,36 @@ struct ContinueStatement: ASTNode {}
 
 struct BlankStatement: ASTNode {}
 
+struct DoCatchStatement: ASTNode {
+    let body: ASTNode
+    let catchBlock: ASTNode
+}
+
+struct ThrowStatement: ASTNode {
+    let expression: ASTNode
+}
+
+struct TryExpression: ASTNode {
+    let expression: ASTNode
+    let isOptional: Bool
+    let isForceUnwrap: Bool
+}
+
+struct AsExpression: ASTNode {
+    let expression: ASTNode
+    let type: TypeIdentifier
+    let isOptional: Bool
+    let isForceUnwrap: Bool
+}
+
+struct IsExpression: ASTNode {
+    let expression: ASTNode
+    let type: TypeIdentifier
+}
+
 struct BlockStatement: ASTNode {
     let statements: [ASTNode]
+    var inBodyParameters: [Parameter] = []
 }
 
 struct ExpressionStatement: ASTNode {

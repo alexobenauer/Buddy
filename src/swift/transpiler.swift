@@ -57,6 +57,10 @@ struct JSTranspiler: Transpiler {
             return transpileContinue(node)
         case let node as BlankStatement:
             return transpileBlank(node)
+        case let node as DoCatchStatement:
+            return transpileDoCatch(node)
+        case let node as ThrowStatement:
+            return transpileThrow(node)
         case let node as BlockStatement:
             return transpileBlock(node)
         case let node as ExpressionStatement:
@@ -68,8 +72,8 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileVarDeclaration(_ node: VarDeclaration, isInClass: Bool = false) -> String {
-        let keyword = isInClass ? "" : (node.isConstant ? "const" : "let")
-        let name = node.name.value
+        let keyword = isInClass ? "" : (node.isConstant && node.initializer != nil ? "const" : "let") // JS doesn't allow constants without initializers
+        let name = transpileIdentifier(node.name.value)
         let type = emitTS && node.type != nil ? ": \(transpileType(node.type!))" : ""
         let initializer = node.initializer != nil ? " = \(transpileExpression(node.initializer!))" : ""
         return "\(keyword) \(name)\(type)\(initializer);"
@@ -77,7 +81,7 @@ struct JSTranspiler: Transpiler {
 
     private func transpileStructDeclaration(_ node: StructDeclaration) -> String {
       // TODO: Need to adjust for JS's pass-by-reference behavior
-        let name = node.name.value
+        let name = transpileIdentifier(node.name.value)
         let inheritedTypes = node.inheritedTypes.map { $0.value }.joined(separator: ", ")
         let members = node.members.map { transpileNode($0, isInClass: true) }.joined(separator: "\n  ")
         
@@ -98,7 +102,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileClassDeclaration(_ node: ClassDeclaration) -> String {
-        let name = node.name.value
+        let name = transpileIdentifier(node.name.value)
         let superclass = node.inheritedTypes.first?.value ?? ""
         let properties = node.properties.map { transpileVarDeclaration($0 as! VarDeclaration, isInClass: true) }.joined(separator: "\n  ")
         let methods = node.methods.map { transpileFunction($0) }.joined(separator: "\n\n  ")
@@ -110,7 +114,7 @@ struct JSTranspiler: Transpiler {
         // Function names, except for constructor, should include external names of parameters that don't have default values, e.g. "print_message"
         // But we may need to do that in the resolver
 
-        let name = node.name.value == "init" ? "constructor" : node.name.value
+        let name = node.name.value == "init" ? "constructor" : transpileIdentifier(node.name.value)
         let params = "params = {}"
         let returnType = emitTS && node.returnType != nil ? ": \(transpileType(node.returnType!))" : ""
         let paramsInBody = transpileParamsIntoBody(node.parameters)
@@ -123,6 +127,8 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileParamsIntoBody(_ parameters: [Parameter]) -> String {
+        if parameters.count == 0 { return "" }
+        
         let paramDestructuring = parameters.map { param in
             let externalName = param.externalName?.value ?? param.internalName.value
             let internalName = param.internalName.value
@@ -134,7 +140,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileEnumDeclaration(_ node: EnumDeclaration, isInClass: Bool = false) -> String {
-        let name = node.name.value
+        let name = transpileIdentifier(node.name.value)
         
         if emitTS {
           let cases = node.cases.map { c in
@@ -147,12 +153,12 @@ struct JSTranspiler: Transpiler {
                 let caseName = c.name.value
                 return "\(caseName): '\(caseName)'"
             }.joined(separator: ",\n  ")
-            return "\(isInClass ? "":"const ")\(name) = Object.freeze({\n  \(cases)\n});"
+            return "\(isInClass ? "static ":"const ")\(name) = Object.freeze({\n  \(cases)\n});"
         }
     }
 
     private func transpileProtocolDeclaration(_ node: ProtocolDeclaration) -> String {
-        let name = node.name.value
+        let name = transpileIdentifier(node.name.value)
         let members = node.members.map { transpileNode($0, isInClass: true) }.joined(separator: "\n  ")
         
         if emitTS {
@@ -163,7 +169,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileTypealias(_ node: TypealiasDeclaration) -> String {
-        let name = node.name.value
+        let name = transpileIdentifier(node.name.value)
         let value = transpileType(node.type)
         return "const \(name) = \(value);"
     }
@@ -179,8 +185,8 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileIfLet(_ node: IfLetStatement) -> String {
-        let name = node.name.value
-        let value = transpileExpression(node.value!)
+        let name = transpileIdentifier(node.name.value)
+        let value = node.value != nil ? transpileExpression(node.value!) : name
         let thenBranch = transpileBlock(node.thenBranch as! BlockStatement)
         var elseBranch = ""
         if let elseBranchNode = node.elseBranch {
@@ -197,7 +203,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileGuardLet(_ node: GuardLetStatement) -> String {
-        let name = node.name.value
+        let name = transpileIdentifier(node.name.value)
         let value = transpileExpression(node.value!)
         let body = transpileBlock(node.body as! BlockStatement)
         return "if (\(value) === undefined || \(value) === null) { \(body) return; } const \(name) = \(value);"
@@ -217,7 +223,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileFor(_ node: ForStatement) -> String {
-        let variable = node.variable.value
+        let variable = transpileIdentifier(node.variable.value)
         let iterable = transpileExpression(node.iterable)
         let body = transpileBlock(node.body as! BlockStatement)
         return "for (const \(variable) of \(iterable)) { \(body) }"
@@ -255,6 +261,31 @@ struct JSTranspiler: Transpiler {
         return ""
     }
 
+    private func transpileDoCatch(_ node: DoCatchStatement) -> String {
+        let body = transpileBlock(node.body as! BlockStatement)
+        let catchBlock = transpileBlock(node.catchBlock as! BlockStatement)
+        return "try { \(body) } catch { \(catchBlock) }"
+    }
+
+    private func transpileThrow(_ node: ThrowStatement) -> String {
+        let expression = transpileExpression(node.expression)
+        return "throw \(expression);"
+    }
+
+    private func transpileTry(_ node: TryExpression) -> String {
+        let expression = transpileExpression(node.expression)
+        
+        if node.isOptional {
+            return "tryOptional(() => \(expression))"
+        }
+        else if node.isForceUnwrap {
+            return "tryForce(() => \(expression))"
+        }
+        else {
+            return expression
+        }
+    }
+
     private func transpileExpressionStatement(_ node: ExpressionStatement) -> String {
         return "\(transpileExpression(node.expression));"
     }
@@ -263,6 +294,8 @@ struct JSTranspiler: Transpiler {
         switch node {
         case let node as AssignmentExpression:
             return transpileAssignment(node)
+        case let node as TernaryExpression:
+            return transpileTernary(node)
         case let node as BinaryExpression:
             return transpileBinary(node)
         case let node as LogicalExpression:
@@ -279,6 +312,12 @@ struct JSTranspiler: Transpiler {
             return transpileIndex(node)
         case let node as OptionalChainingExpression:
             return transpileOptionalChaining(node)
+        case let node as AsExpression:
+            return transpileAs(node)
+        case let node as IsExpression:
+            return transpileIs(node)
+        case let node as TryExpression:
+            return transpileTry(node)
         case let node as LiteralExpression:
             return transpileLiteral(node)
         case let node as StringLiteralExpression:
@@ -314,6 +353,13 @@ struct JSTranspiler: Transpiler {
         default:
             return "\(target) = \(value)"
         }
+    }
+    
+    private func transpileTernary(_ node: TernaryExpression) -> String {
+        let condition = transpileExpression(node.condition)
+        let thenBranch = transpileExpression(node.thenBranch)
+        let elseBranch = transpileExpression(node.elseBranch)
+        return "\(condition) ? \(thenBranch) : \(elseBranch)"
     }
 
     private func transpileBinary(_ node: BinaryExpression) -> String {
@@ -395,23 +441,28 @@ struct JSTranspiler: Transpiler {
 
     private func transpileCall(_ node: CallExpression) -> String {
         let callee = transpileExpression(node.callee)
-        let args = node.arguments.map { arg in
-            if let label = arg.label {
-                return "\(label.value): \(transpileExpression(arg.value))"
-            }
-            else {
-                return "_: \(transpileExpression(arg.value))"
-            }
-        }.joined(separator: ", ")
+        var args = ""
         
-        let wrappedArgs = "{ \(args) }" //node.arguments.contains(where: { $0.label != nil }) ? "{ \(args) }" : args
+        if node.arguments.count > 0 {
+            let inner = node.arguments.map { arg in
+                if let label = arg.label {
+                    return "\(label.value): \(transpileExpression(arg.value))"
+                }
+                else {
+                    return "_: \(transpileExpression(arg.value))"
+                }
+            }.joined(separator: ", ")
+            
+            // TODO: Only do this for transpiled functions
+            args = "{ \(inner) }" //node.arguments.contains(where: { $0.label != nil }) ? "{ \(args) }" : args
+        }
         let isClass = callee.first?.isUppercase == true
-        return "\(isClass ? "new " : "")\(callee)(\(wrappedArgs))"
+        return "\(isClass ? "new " : "")\(callee)(\(args))"
     }
 
     private func transpileGet(_ node: GetExpression) -> String {
         let object = transpileExpression(node.object)
-        let property = node.name.value
+        let property = transpileIdentifier(node.name.value)
         return "\(object).\(property)"
     }
 
@@ -428,6 +479,20 @@ struct JSTranspiler: Transpiler {
     private func transpileOptionalChaining(_ node: OptionalChainingExpression) -> String {
         let object = transpileExpression(node.object)
         return "\(object)\(node.forceUnwrap ? "" : "?.")"
+    }
+
+    private func transpileAs(_ node: AsExpression) -> String {
+        // TODO: Needs to handle some kind of type wrapping, so that the check in transpileIs works.
+        return transpileExpression(node.expression)
+    }
+
+    private func transpileIs(_ node: IsExpression) -> String {
+        // TODO: Not sure how we want to implement this. In order to do runtime type checking, we could have a runtime type map.
+        // One approach is to use the symbol table to map names to types, and then use that map in the transpiler to do the checking.
+        // Returning true for now...
+        let expression = transpileExpression(node.expression)
+        let type = transpileType(node.type)
+        return "/* TODO: \(expression) is \(type)*/ true"
     }
 
     private func transpileLiteral(_ node: LiteralExpression) -> String {
@@ -478,7 +543,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileVariable(_ node: VariableExpression) -> String {
-        return node.name.value
+        return transpileIdentifier(node.name.value)
     }
 
     private func transpileArrayLiteral(_ node: ArrayLiteralExpression) -> String {
@@ -498,7 +563,7 @@ struct JSTranspiler: Transpiler {
     private func transpileType(_ type: TypeIdentifier) -> String {
         switch type {
         case .identifier(let token):
-            switch token.value {
+            switch token {
             case "Int", "Double", "Float":
                 return "number"
             case "String", "Character":
@@ -510,7 +575,7 @@ struct JSTranspiler: Transpiler {
             case "Void":
                 return "void"
             default:
-                return token.value
+                return token
             }
         case .array(let elementType):
             return "\(transpileType(elementType))[]"
@@ -521,6 +586,23 @@ struct JSTranspiler: Transpiler {
         }
     }
 
+    // identifier transpilation:
+    //  mostly need to rename anything that is a reserved word in JS
+    //  but also need to handle things that are capitalized in Swift but not in JS
+    //  need to change nil to null
+    private func transpileIdentifier(_ identifier: String) -> String {
+        switch identifier {
+        case "function": return "func"
+        case "arguments": return "args"
+        default:
+            if identifier.first == "$" {
+                return "arg_\(identifier.dropFirst())"
+            }
+
+            return identifier
+        }
+    }
+    
     private func transpileBlock(_ node: BlockStatement) -> String {
         return node.statements.map { transpileNode($0) }.joined(separator: "\n")
     }
