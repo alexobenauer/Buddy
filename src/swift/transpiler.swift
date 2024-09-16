@@ -10,7 +10,7 @@ struct JSTranspiler: Transpiler {
     let emitTS: Bool = false // TODO: Remove
     let minimalRuntime: Bool
     
-    init(minimalRuntime: Bool = false) {
+    init(minimalRuntime: Bool = true) {
         self.minimalRuntime = minimalRuntime
     }
 
