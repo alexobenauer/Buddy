@@ -1,59 +1,92 @@
-let runtime = libraryJS + """
-Array.prototype.append = function(params) {
-  const { _: element } = params;
-  this.push(element);
-  return this;
-};
-
-Object.defineProperty(String.prototype, 'count', {
-  get: function() {
-    return this.length;
-  },
-  enumerable: false,
-  configurable: true
-});
-
-function range(start, end) {
-  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+func runtime(minimalRuntime: Bool) -> String {
+    return [
+        // Functions used by the code emitted from the transpiler
+        """
+        Array.prototype.append = function(params) {
+          const { _: element } = params;
+          this.push(element);
+          return this;
+        };
+        
+        Object.defineProperty(String.prototype, 'count', {
+          get: function() {
+            return this.length;
+          },
+          enumerable: false,
+          configurable: true
+        });
+        
+        function range(start, end) {
+          return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        }
+        
+        function tryOptional(fn) {
+            try {
+                return fn();
+            } catch {
+                return null;
+            }
+        }
+        
+        function tryForce(fn) {
+            try {
+                return fn();
+            } catch {
+                throw new Error("Fatal error: force try failed with error: " + error);
+            }
+        }
+        """,
+    
+        // Functions available to user Swift code, providing both JS and Swift implementations so the transpiler can be built in Swift
+        makeFunction(substrJS, minimalRuntime: minimalRuntime),
+        makeFunction(charAtJS, minimalRuntime: minimalRuntime),
+        
+        // Functions available to user Swift code, only JS implementation provided
+        makeFunction(stringifyJS, minimalRuntime: minimalRuntime),
+        makeFunction(printJS, minimalRuntime: minimalRuntime)
+    ].joined(separator: "\n")
 }
-
-function tryOptional(fn) {
-    try {
-        return fn();
-    } catch {
-        return null;
-    }
-}
-
-function tryForce(fn) {
-    try {
-        return fn();
-    } catch {
-        throw new Error("Fatal error: force try failed with error: " + error);
-    }
-}
-"""
 
 // Above functions are used by the code emitted from the transpiler
 
 // Below functions are available to user Swift code, providing both JS and Swift implementations so the transpiler can be built in Swift
 
-let libraryJS = [substrJS, charAtJS].joined(separator: "\n") + """
+// let libraryJS = [substrJS, charAtJS].joined(separator: "\n") + """
 
-function stringify(params) {
-    const { _: arg } = params;
-    return JSON.stringify(arg);
-}
+// const stringify = {
+//     value: (params) => {
+//         const { _: arg } = params;
+//         return JSON.stringify(arg);
+//     }
+// }
 
-//function print(...args) {
+// const print = {
+//     value: (params) => {
+//         const { _: arg } = params; // TODO: Multi-arg support
+//         console.log(arg);
+//     }
+
+//     // TODO: Multi-arg support
+//     //(...args) {
+//     //  console.log(...args);
+//     //}
+// }
+// """;
+
+let stringifyJS = JSFunctionDeclaration(name: "stringify", body: """
+const { _: arg } = params;
+return JSON.stringify(arg);
+""")
+
+let printJS = JSFunctionDeclaration(name: "print", body: """
+const { _: arg } = params; // TODO: Multi-arg support
+console.log(arg);
+
+// TODO: Multi-arg support
+//(...args) {
 //  console.log(...args);
 //}
-
-function print(params) {
-    const { _: arg } = params; // TODO: Multi-arg support
-    console.log(arg);
-}
-""";
+""")
 
 func substr(_ str: String, start: Int, end: Int) -> String {
     guard start >= 0, end >= start, end <= str.count else {
@@ -66,16 +99,15 @@ func substr(_ str: String, start: Int, end: Int) -> String {
     return String(str[startIndex..<endIndex])
 }
 
-let substrJS = """
-function substr(params) {
-    const { _: str, start, end } = params;
-    if (start < 0 || end < start || end > str.length) {
-        return "";  // Return empty string for invalid indices
-    }
-    
-    return str.slice(start, end);
+let substrJS = JSFunctionDeclaration(name: "substr", body: """
+const { _: str, start, end } = params;
+
+if (start < 0 || end < start || end > str.length) {
+    return "";  // Return empty string for invalid indices
 }
-"""
+
+return str.slice(start, end);
+""")
 
 func charAt(_ str: String, index: Int, stringLength: Int? = 0) -> Character? {
     guard index >= 0, index < (stringLength ?? str.count) else {
@@ -86,24 +118,39 @@ func charAt(_ str: String, index: Int, stringLength: Int? = 0) -> Character? {
     return str[stringIndex]
 }
 
-let charAtJS = """
-function charAt(params) {
-    const { _: str, index } = params;
-    if (index < 0 || index >= str.length) {
-        return null;  // Return null for invalid index
-    }
+let charAtJS = JSFunctionDeclaration(name: "charAt", body: """
+const { _: str, index } = params;
 
-    return str.charAt(index);
+if (index < 0 || index >= str.length) {
+    return null;  // Return null for invalid index
 }
-"""
 
-// func repeatString(_ str: String, count: Int) -> String {
-//     return String(repeating: str, count: count)
-// }
+return str.charAt(index);
+""")
 
-// let repeatJS = """
-// function repeatString(params) {
-//     const { _: str, count } = params;
-//     return str.repeat(count);
-// }
-// """
+struct JSFunctionDeclaration {
+    let name: String
+    let body: String
+}
+
+func makeFunction(_ function: JSFunctionDeclaration, minimalRuntime: Bool) -> String {
+    let fnName = function.name
+    let fnBody = function.body
+
+    if minimalRuntime {
+        return """
+        function \(fnName)(params) {
+            \(fnBody)
+        }
+        """
+    }
+    else {
+        return """
+        const \(fnName) = {
+            value: (params) => {
+                \(fnBody)
+            }
+        }
+        """
+    }
+}

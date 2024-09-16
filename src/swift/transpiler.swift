@@ -7,14 +7,15 @@ struct TranspilerError: Error {
 }
 
 struct JSTranspiler: Transpiler {
-    let emitTS: Bool
+    let emitTS: Bool = false // TODO: Remove
+    let minimalRuntime: Bool
     
-    init(emitTS: Bool = false) {
-        self.emitTS = emitTS
+    init(minimalRuntime: Bool = false) {
+        self.minimalRuntime = minimalRuntime
     }
 
     func transpile(ast: [ASTNode]) -> String {
-        return runtime + "\n\n// Compiled code\n\n" + ast.map { transpileNode($0) }.joined(separator: "\n")
+        return runtime(minimalRuntime: minimalRuntime) + "\n\n// Compiled code\n\n" + ast.map({ transpileNode($0) }).joined(separator: "\n")
     }
 
     private func transpileNode(_ node: ASTNode, isInClass: Bool = false) -> String {
@@ -74,9 +75,23 @@ struct JSTranspiler: Transpiler {
     private func transpileVarDeclaration(_ node: VarDeclaration, isInClass: Bool = false) -> String {
         let keyword = isInClass ? "" : (node.isConstant && node.initializer != nil ? "const" : "let") // JS doesn't allow constants without initializers
         let name = transpileIdentifier(node.name.value)
-        let type = emitTS && node.type != nil ? ": \(transpileType(node.type!))" : ""
-        let initializer = node.initializer != nil ? " = \(transpileExpression(node.initializer!))" : ""
-        return "\(keyword) \(name)\(type)\(initializer);"
+        let type = transpileType(node.type)
+        
+        if minimalRuntime {
+            let initializer = node.initializer != nil ? " = \(transpileExpression(node.initializer!))" : ""
+            return "\(keyword) \(name)\(initializer);"
+        }
+        else {
+            let initializer = node.initializer != nil ? transpileExpression(node.initializer!) : "null"
+            return """
+            \(keyword) \(name) = {
+                value: \(initializer),
+                type: "\(type)",\(node.isConstant ? "\nisConstant: true," : "")\(node.isPrivate ? "\nisPrivate: true," : "")\(node.initializer != nil ? "\nisUndefined: true," : "")
+            };
+            """
+        }
+
+        // Wrapping all variables lets us handle that JS doesn't allow constants without initializers, it lets us handle optional types, and it lets us store information about types without having to do more resolver passes
     }
 
     private func transpileStructDeclaration(_ node: StructDeclaration) -> String {
@@ -153,7 +168,13 @@ struct JSTranspiler: Transpiler {
                 let caseName = c.name.value
                 return "\(caseName): '\(caseName)'"
             }.joined(separator: ",\n  ")
-            return "\(isInClass ? "static ":"const ")\(name) = Object.freeze({\n  \(cases)\n});"
+
+            if minimalRuntime {
+                return "\(isInClass ? "static ":"const ")\(name) = Object.freeze({\n  \(cases)\n});"
+            }
+            else {
+                return "\(isInClass ? "static ":"const ")\(name) = { type: 'enum', value: Object.freeze({\n  \(cases)\n}) };"
+            }
         }
     }
 
@@ -192,8 +213,14 @@ struct JSTranspiler: Transpiler {
         if let elseBranchNode = node.elseBranch {
             elseBranch = " else { \(transpileNode(elseBranchNode)) }"
         }
-        let assignment = name == value ? "" : "const \(name) = \(value); "
-        return "if (\(value) !== undefined && \(value) !== null) { \(assignment)\(thenBranch) }\(elseBranch)"
+        if minimalRuntime {
+            let assignment = name == value ? "" : "const \(name) = \(value); "
+            return "if (\(value) !== undefined && \(value) !== null) { \(assignment)\(thenBranch) }\(elseBranch)"
+        }
+        else {
+            let assignment = name == value ? "" : "const \(name) = { value: \(value) }; "
+            return "if (\(value) !== undefined && \(value) !== null) { \(assignment)\(thenBranch) }\(elseBranch)"
+        }
     }
 
     private func transpileGuard(_ node: GuardStatement) -> String {
@@ -440,7 +467,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileCall(_ node: CallExpression) -> String {
-        let callee = transpileExpression(node.callee)
+        var callee = transpileExpression(node.callee)
         var args = ""
         
         if node.arguments.count > 0 {
@@ -457,6 +484,11 @@ struct JSTranspiler: Transpiler {
             args = "{ \(inner) }" //node.arguments.contains(where: { $0.label != nil }) ? "{ \(args) }" : args
         }
         let isClass = callee.first?.isUppercase == true
+
+        if !minimalRuntime && isClass {
+            callee = callee.hasSuffix(".value") ? String(callee.dropLast(6)) : callee
+        }
+
         return "\(isClass ? "new " : "")\(callee)(\(args))"
     }
 
@@ -543,7 +575,12 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileVariable(_ node: VariableExpression) -> String {
-        return transpileIdentifier(node.name.value)
+        if minimalRuntime { 
+            return "\(transpileIdentifier(node.name.value))"
+        }
+        else {
+            return "\(transpileIdentifier(node.name.value)).value"
+        }
     }
 
     private func transpileArrayLiteral(_ node: ArrayLiteralExpression) -> String {
@@ -560,7 +597,9 @@ struct JSTranspiler: Transpiler {
         return "({ \(pairs) })"
     }
 
-    private func transpileType(_ type: TypeIdentifier) -> String {
+    private func transpileType(_ type: TypeIdentifier?) -> String {
+        guard let type = type else { return "any" }
+
         switch type {
         case .identifier(let token):
             switch token {
