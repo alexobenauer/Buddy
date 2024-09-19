@@ -483,13 +483,14 @@ struct JSTranspiler: Transpiler {
             // TODO: Only do this for transpiled functions
             args = "{ \(inner) }" //node.arguments.contains(where: { $0.label != nil }) ? "{ \(args) }" : args
         }
-        let isClass = callee.first?.isUppercase == true
+        
+        let isInit = node.isInitializer
 
-        if !minimalRuntime && isClass {
+        if !minimalRuntime && isInit {
             callee = callee.hasSuffix(".value") ? String(callee.dropLast(6)) : callee
         }
 
-        return "\(isClass ? "new " : "")\(callee)(\(args))"
+        return "\(isInit ? "new " : "")\(callee)(\(args))"
     }
 
     private func transpileGet(_ node: GetExpression) -> String {

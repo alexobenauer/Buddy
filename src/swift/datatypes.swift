@@ -86,7 +86,7 @@ struct ParserError: Error {
 
 struct Attribute: ASTNode {
     let name: Token
-    let arguments: [ASTNode]
+    var arguments: [ASTNode]
 }
 
 struct VarDeclaration: ASTNode {
@@ -106,20 +106,20 @@ struct StructDeclaration: ASTNode {
 struct ClassDeclaration: ASTNode {
     let name: Token
     let inheritedTypes: [Token]
-    let methods: [FunctionDeclaration]
-    let properties: [ASTNode]    
+    var methods: [FunctionDeclaration]
+    var properties: [ASTNode]    
 }
 
 struct FunctionDeclaration: ASTNode {
     let name: Token
     let kind: Kind
-    let attributes: [Attribute]
+    var attributes: [Attribute]
     let isStatic: Bool
     let isPrivate: Bool
     let canThrow: Bool
-    let parameters: [Parameter]
+    var parameters: [Parameter]
     let returnType: TypeIdentifier?
-    let body: BlockStatement
+    var body: BlockStatement
 
     enum Kind {
         case method
@@ -133,7 +133,7 @@ struct Parameter {
     let internalName: Token
     let type: TypeIdentifier
     let isVariadic: Bool
-    let defaultValue: ASTNode?
+    var defaultValue: ASTNode?
 }
 
 indirect enum TypeIdentifier {
@@ -145,19 +145,19 @@ indirect enum TypeIdentifier {
 
 struct EnumDeclaration: ASTNode {
     let name: Token
-    let cases: [EnumCase]
+    var cases: [EnumCase]
 }
 
 struct EnumCase {
     let name: Token
-    let rawValue: ASTNode?
-    let associatedValues: [Parameter]
+    var rawValue: ASTNode?
+    var associatedValues: [Parameter]
 }
 
 struct ProtocolDeclaration: ASTNode {
     let name: Token
     let inheritedProtocols: [Token]
-    let members: [ASTNode]
+    var members: [ASTNode]
 }
 
 struct ProtocolPropertyDeclaration: ASTNode {
@@ -170,7 +170,7 @@ struct ProtocolPropertyDeclaration: ASTNode {
 
 struct ProtocolMethodDeclaration: ASTNode {
     let name: Token
-    let parameters: [Parameter]
+    var parameters: [Parameter]
     let returnType: TypeIdentifier?
 }
 
@@ -180,64 +180,64 @@ struct TypealiasDeclaration: ASTNode {
 }
 
 struct TernaryExpression: ASTNode {
-    let condition: ASTNode
-    let thenBranch: ASTNode
-    let elseBranch: ASTNode
+    var condition: ASTNode
+    var thenBranch: ASTNode
+    var elseBranch: ASTNode
 }
 
 struct IfStatement: ASTNode {
-    let condition: ASTNode
-    let thenBranch: ASTNode
-    let elseBranch: ASTNode?
+    var condition: ASTNode
+    var thenBranch: ASTNode
+    var elseBranch: ASTNode?
 }
 
 struct IfLetStatement: ASTNode {
     let name: Token
-    let value: ASTNode?
-    let thenBranch: ASTNode
-    let elseBranch: ASTNode?
+    var value: ASTNode?
+    var thenBranch: ASTNode
+    var elseBranch: ASTNode?
 }
 
 struct GuardStatement: ASTNode {
-    let condition: ASTNode
-    let body: ASTNode
+    var condition: ASTNode
+    var body: ASTNode
 }
 
 struct GuardLetStatement: ASTNode {
     let name: Token
-    let value: ASTNode?
-    let body: ASTNode
+    var value: ASTNode?
+    var body: ASTNode
 }
 
 struct SwitchStatement: ASTNode {
-    let expression: ASTNode
-    let cases: [SwitchCase]
-    let defaultCase: [ASTNode]?
+    var expression: ASTNode
+    var cases: [SwitchCase]
+    var defaultCase: [ASTNode]?
 }
 
 struct SwitchCase {
-    let expressions: [ASTNode]
-    let statements: [ASTNode]
+    var expressions: [ASTNode]
+    var statements: [ASTNode]
 }
 
 struct ForStatement: ASTNode {
     let variable: Token
-    let iterable: ASTNode
-    let body: ASTNode
+    var iterable: ASTNode
+    var body: ASTNode
 }
 
 struct WhileStatement: ASTNode {
-    let condition: ASTNode
-    let body: ASTNode
+    var condition: ASTNode
+    var body: ASTNode
 }
 
 struct RepeatStatement: ASTNode {
-    let body: ASTNode
-    let condition: ASTNode
+    var body: ASTNode
+    var condition: ASTNode
 }
 
 struct ReturnStatement: ASTNode {
-    let value: ASTNode?
+    var value: ASTNode?
 }
 
 struct BreakStatement: ASTNode {}
@@ -247,96 +247,97 @@ struct ContinueStatement: ASTNode {}
 struct BlankStatement: ASTNode {}
 
 struct DoCatchStatement: ASTNode {
-    let body: ASTNode
-    let catchBlock: ASTNode
+    var body: ASTNode
+    var catchBlock: ASTNode
 }
 
 struct ThrowStatement: ASTNode {
-    let expression: ASTNode
+    var expression: ASTNode
 }
 
 struct TryExpression: ASTNode {
-    let expression: ASTNode
+    var expression: ASTNode
     let isOptional: Bool
     let isForceUnwrap: Bool
 }
 
 struct AsExpression: ASTNode {
-    let expression: ASTNode
+    var expression: ASTNode
     let type: TypeIdentifier
     let isOptional: Bool
     let isForceUnwrap: Bool
 }
 
 struct IsExpression: ASTNode {
-    let expression: ASTNode
+    var expression: ASTNode
     let type: TypeIdentifier
 }
 
 struct BlockStatement: ASTNode {
-    let statements: [ASTNode]
+    var statements: [ASTNode]
     var inBodyParameters: [Parameter] = []
 }
 
 struct ExpressionStatement: ASTNode {
-    let expression: ASTNode
+    var expression: ASTNode
 }
 
 struct AssignmentExpression: ASTNode {
-    let target: ASTNode
-    let value: ASTNode
+    var target: ASTNode
+    var value: ASTNode
     let op: TokenType
 }
 
 struct BinaryExpression: ASTNode {
-    let left: ASTNode
-    let right: ASTNode
+    var left: ASTNode
+    var right: ASTNode
     let op: TokenType
 }
 
 struct LogicalExpression: ASTNode {
-    let left: ASTNode
-    let right: ASTNode
+    var left: ASTNode
+    var right: ASTNode
     let op: TokenType
 }
 
 struct BinaryRangeExpression: ASTNode {
-    let left: ASTNode
-    let right: ASTNode
+    var left: ASTNode
+    var right: ASTNode
     let op: TokenType
 }
 
 struct UnaryExpression: ASTNode {
     let op: TokenType
-    let operand: ASTNode
+    var operand: ASTNode
 }
 
 struct Argument {
     let label: Token?
-    let value: ASTNode
+    var value: ASTNode
 }
 
 struct CallExpression: ASTNode {
-    let callee: ASTNode
-    let arguments: [Argument]
+    var callee: ASTNode
+    var arguments: [Argument]
     var isOptional: Bool = false
-    var isMember: Bool = false // if true, then this call is a member of a class or struct; if false, then this call is a standalone function call
+    
+    var isInitializer: Bool = false // if true, then this call is an initializer of a class or struct
 }
 
 struct GetExpression: ASTNode {
-    let object: ASTNode
+    var object: ASTNode
     let name: Token
     var isOptional: Bool = false
 }
 
 struct IndexExpression: ASTNode {
-    let object: ASTNode
-    let index: ASTNode
+    var object: ASTNode
+    var index: ASTNode
     var isOptional: Bool = false
 }
 
 struct OptionalChainingExpression: ASTNode {
-    let object: ASTNode
+    var object: ASTNode
     var forceUnwrap: Bool = false
 }
 
@@ -365,19 +366,19 @@ struct VariableExpression: ASTNode {
 }
 
 struct GroupingExpression: ASTNode {
-    let expression: ASTNode
+    var expression: ASTNode
 }
 
 struct ArrayLiteralExpression: ASTNode {
-    let elements: [ASTNode]
+    var elements: [ASTNode]
 }
 
 struct KeyValuePair {
-    let key: ASTNode
-    let value: ASTNode
+    var key: ASTNode
+    var value: ASTNode
 }
 
 struct DictionaryLiteralExpression: ASTNode {
-    let elements: [KeyValuePair]
+    var elements: [KeyValuePair]
 }
 
