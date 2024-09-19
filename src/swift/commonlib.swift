@@ -1,9 +1,9 @@
-func runtime(minimalRuntime: Bool) -> String {
+func runtime(managedRuntime: Bool) -> String {
     return [
         // Functions used by the code emitted from the transpiler
         """
         Array.prototype.append = function(params) {
-          const { _: element } = params;
+          const { _1: element } = params;
           this.push(element);
           return this;
         };
@@ -38,12 +38,12 @@ func runtime(minimalRuntime: Bool) -> String {
         """,
     
         // Functions available to user Swift code, providing both JS and Swift implementations so the transpiler can be built in Swift
-        makeFunction(substrJS, minimalRuntime: minimalRuntime),
-        makeFunction(charAtJS, minimalRuntime: minimalRuntime),
+        makeFunction(substrJS, managedRuntime: managedRuntime),
+        makeFunction(charAtJS, managedRuntime: managedRuntime),
         
         // Functions available to user Swift code, only JS implementation provided
-        makeFunction(stringifyJS, minimalRuntime: minimalRuntime),
-        makeFunction(printJS, minimalRuntime: minimalRuntime)
+        makeFunction(stringifyJS, managedRuntime: managedRuntime),
+        makeFunction(printJS, managedRuntime: managedRuntime)
     ].joined(separator: "\n")
 }
 
@@ -55,14 +55,14 @@ func runtime(minimalRuntime: Bool) -> String {
 
 // const stringify = {
 //     value: (params) => {
-//         const { _: arg } = params;
+//         const { _1: arg } = params;
 //         return JSON.stringify(arg);
 //     }
 // }
 
 // const print = {
 //     value: (params) => {
-//         const { _: arg } = params; // TODO: Multi-arg support
+//         const { _1: arg } = params; // TODO: Multi-arg support
 //         console.log(arg);
 //     }
 
@@ -74,12 +74,12 @@ func runtime(minimalRuntime: Bool) -> String {
 // """;
 
 let stringifyJS = JSFunctionDeclaration(name: "stringify", body: """
-const { _: arg } = params;
+const { _1: arg } = params;
 return JSON.stringify(arg);
 """)
 
 let printJS = JSFunctionDeclaration(name: "print", body: """
-const { _: arg } = params; // TODO: Multi-arg support
+const { _1: arg } = params; // TODO: Multi-arg support
 console.log(arg);
 
 // TODO: Multi-arg support
@@ -100,7 +100,7 @@ func substr(_ str: String, start: Int, end: Int) -> String {
 }
 
 let substrJS = JSFunctionDeclaration(name: "substr", body: """
-const { _: str, start, end } = params;
+const { _1: str, start, end } = params;
 
 if (start < 0 || end < start || end > str.length) {
     return "";  // Return empty string for invalid indices
@@ -119,7 +119,7 @@ func charAt(_ str: String, index: Int, stringLength: Int? = 0) -> Character? {
 }
 
 let charAtJS = JSFunctionDeclaration(name: "charAt", body: """
-const { _: str, index } = params;
+const { _1: str, index } = params;
 
 if (index < 0 || index >= str.length) {
     return null;  // Return null for invalid index
@@ -133,23 +133,23 @@ struct JSFunctionDeclaration {
     let body: String
 }
 
-func makeFunction(_ function: JSFunctionDeclaration, minimalRuntime: Bool) -> String {
+func makeFunction(_ function: JSFunctionDeclaration, managedRuntime: Bool) -> String {
     let fnName = function.name
     let fnBody = function.body
 
-    if minimalRuntime {
-        return """
-        function \(fnName)(params) {
-            \(fnBody)
-        }
-        """
-    }
-    else {
+    if managedRuntime {
         return """
         const \(fnName) = {
             value: (params) => {
                 \(fnBody)
             }
+        }
+        """
+    }
+    else {
+        return """
+        function \(fnName)(params) {
+            \(fnBody)
         }
         """
     }

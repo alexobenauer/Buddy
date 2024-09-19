@@ -14,13 +14,13 @@ class Parser {
 
     func parse() -> [ASTNode]? {
         self.ast = []
-        while !isAtEnd() {
-            if let node = declaration(inScopeOf: nil) {
-                ast.append(node)
+        while !self.isAtEnd() {
+            if let node = self.declaration(inScopeOf: nil) {
+                self.ast.append(node)
             }
         }
 
-        return errors.count > 0 ? nil : ast
+        return self.errors.count > 0 ? nil : self.ast
     }
 
     // MARK: - Declarations
@@ -28,58 +28,59 @@ class Parser {
     func declaration(inScopeOf: String?) -> ASTNode? {
         do {
             var attributes: [Attribute] = []
-            while match(TokenType.AT) {
-                attributes.append(try attribute())
+            while self.match(TokenType.AT) {
+                attributes.append(try self.attribute())
             }
 
-            let isPrivate = match(TokenType.PRIVATE)
+            let isPrivate = self.match(TokenType.PRIVATE)
             
-            if match(TokenType.INIT) && inScopeOf != nil {
-                return try function(FunctionDeclaration.Kind.initializer, isPrivate: isPrivate, attributes: attributes)
+            if self.match(TokenType.INIT) && inScopeOf != nil {
+                return try self.function(FunctionDeclaration.Kind.initializer, isPrivate: isPrivate, attributes: attributes)
             }
-            if match(TokenType.VAR, TokenType.LET) {
+            if self.match(TokenType.VAR, TokenType.LET) {
                 return try varDeclaration(isPrivate: isPrivate)
             }
-            if match(TokenType.FUNC) { 
-                return try function(
+            if self.match(TokenType.FUNC) { 
+                return try self.function(
                     inScopeOf == nil ? FunctionDeclaration.Kind.function : FunctionDeclaration.Kind.method,
                     isPrivate: isPrivate,
                     attributes: attributes
                 )
             }
-            if match(TokenType.STRUCT) { return try structDeclaration() }
-            if match(TokenType.CLASS) { return try classDeclaration() }
-            if match(TokenType.ENUM) { return try enumDeclaration() }
-            if match(TokenType.PROTOCOL) { return try protocolDeclaration() }
-            if match(TokenType.TYPEALIAS) { return try typealiasDeclaration() }
+            if self.match(TokenType.STRUCT) { return try self.structDeclaration() }
+            if self.match(TokenType.CLASS) { return try self.classDeclaration() }
+            if self.match(TokenType.ENUM) { return try self.enumDeclaration() }
+            if self.match(TokenType.PROTOCOL) { return try self.protocolDeclaration() }
+            if self.match(TokenType.TYPEALIAS) { return try self.typealiasDeclaration() }
 
             if let inScopeOf {
-                throw error(peek(), "Expect method or property declaration in \(inScopeOf).")
+                throw self.error(self.peek(), "Expect method or property declaration in \(inScopeOf).")
             }
             else {
-                return try statement()
+                return try self.statement()
             }
         } catch {
+            print(error)
             self.errors.append(error)
-            synchronize()
+            self.synchronize()
             return nil
         }
     }
 
     func attribute() throws -> Attribute {
-        let name = try consume(TokenType.IDENTIFIER, "Expect attribute name.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect attribute name.")
         // TODO: Support for args?
         return Attribute(name: name, arguments: [])
     }
 
     func varDeclaration(isPrivate: Bool) throws -> VarDeclaration {
-        let isConstant = previous().type == TokenType.LET
-        let name = try consume(TokenType.IDENTIFIER, "Expect variable name.")
+        let isConstant = self.previous().type == TokenType.LET
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect variable name.")
 
-        let type: TypeIdentifier? = match(TokenType.COLON) ? try typeIdentifier() : nil
-        let initializer: ASTNode? = match(TokenType.EQUAL) ? try expression() : nil
+        let type: TypeIdentifier? = self.match(TokenType.COLON) ? try self.typeIdentifier() : nil
+        let initializer: ASTNode? = self.match(TokenType.EQUAL) ? try self.expression() : nil
 
-        match(TokenType.SEMICOLON)
+        self.match(TokenType.SEMICOLON)
 
         return VarDeclaration(
             name: name, 
@@ -91,84 +92,84 @@ class Parser {
     }
 
     func structDeclaration() throws -> StructDeclaration {
-        let name = try consume(TokenType.IDENTIFIER, "Expect struct name.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect struct name.")
         
         var inheritedTypes: [Token] = []
         if match(TokenType.COLON) {
             repeat {
-                inheritedTypes.append(try consume(TokenType.IDENTIFIER, "Expect inherited type name."))
-            } while match(TokenType.COMMA)
+                inheritedTypes.append(try self.consume(TokenType.IDENTIFIER, "Expect inherited type name."))
+            } while self.match(TokenType.COMMA)
         }
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before struct body.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before struct body.")
         
         var members: [ASTNode] = []
-        while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
-            if let node = declaration(inScopeOf: "struct") {
+        while !self.check(TokenType.RIGHT_BRACE) && !self.isAtEnd() {
+            if let node = self.declaration(inScopeOf: "struct") {
                 members.append(node)
             }
         }
 
-        try consume(TokenType.RIGHT_BRACE, "Expect '}' after struct body.")
+        try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after struct body.")
 
         return StructDeclaration(name: name, inheritedTypes: inheritedTypes, members: members)
     }
 
     func classDeclaration() throws -> ClassDeclaration {
-        let name = try consume(TokenType.IDENTIFIER, "Expect class name.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect class name.")
         
         var inheritedTypes: [Token] = []
         if match(TokenType.COLON) {
             repeat {
-                inheritedTypes.append(try consume(TokenType.IDENTIFIER, "Expect inherited type name."))
-            } while match(TokenType.COMMA)
+                inheritedTypes.append(try self.consume(TokenType.IDENTIFIER, "Expect inherited type name."))
+            } while self.match(TokenType.COMMA)
         }
 
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before class body.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before class body.")
 
         var methods: [FunctionDeclaration] = []
         var properties: [ASTNode] = []
 
-        while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
+        while !self.check(TokenType.RIGHT_BRACE) && !self.isAtEnd() {
             var attributes: [Attribute] = []
-            while match(TokenType.AT) {
-                attributes.append(try attribute())
+            while self.match(TokenType.AT) {
+                attributes.append(try self.attribute())
             }
             
-            let isPrivate = match(TokenType.PRIVATE)
+            let isPrivate = self.match(TokenType.PRIVATE)
             
-            if match(TokenType.INIT) {
-                methods.append(try function(FunctionDeclaration.Kind.initializer, isPrivate: isPrivate, attributes: attributes))
+            if self.match(TokenType.INIT) {
+                methods.append(try self.function(FunctionDeclaration.Kind.initializer, isPrivate: isPrivate, attributes: attributes))
             }
-            else if match(TokenType.FUNC) {
-                methods.append(try function(FunctionDeclaration.Kind.method, isPrivate: isPrivate, attributes: attributes))
+            else if self.match(TokenType.FUNC) {
+                methods.append(try self.function(FunctionDeclaration.Kind.method, isPrivate: isPrivate, attributes: attributes))
             }
-            else if match(TokenType.VAR, TokenType.LET) {
+            else if self.match(TokenType.VAR, TokenType.LET) {
                 properties.append(try varDeclaration(isPrivate: isPrivate))
             } 
             else {
-                throw error(peek(), "Expect method or property declaration in class.")
+                throw self.error(self.peek(), "Expect method or property declaration in class.")
             }
         }
 
-        try consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.")
+        try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.")
 
         return ClassDeclaration(name: name, inheritedTypes: inheritedTypes, methods: methods, properties: properties)
     }
 
     func function(_ kind: FunctionDeclaration.Kind, isPrivate: Bool, attributes: [Attribute]) throws -> FunctionDeclaration {
-        let isStatic = kind == FunctionDeclaration.Kind.method && match(TokenType.STATIC)
-        let name = kind == FunctionDeclaration.Kind.initializer ? previous() : try consume(TokenType.IDENTIFIER, "Expect \(kind) name.")
+        let isStatic = kind == FunctionDeclaration.Kind.method && self.match(TokenType.STATIC)
+        let name = kind == FunctionDeclaration.Kind.initializer ? self.previous() : try self.consume(TokenType.IDENTIFIER, "Expect \(kind) name.")
 
-        try consume(TokenType.LEFT_PAREN, "Expect '(' after \(kind) name.")
-        let parameters = try parameterList()
-        try consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
+        try self.consume(TokenType.LEFT_PAREN, "Expect '(' after \(kind) name.")
+        let parameters = try self.parameterList()
+        try self.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
 
-        let canThrow: Bool = match(TokenType.THROWS)
+        let canThrow: Bool = self.match(TokenType.THROWS)
 
-        let returnType: TypeIdentifier? = match(TokenType.RIGHT_ARROW) ? try typeIdentifier() : nil
+        let returnType: TypeIdentifier? = self.match(TokenType.RIGHT_ARROW) ? try self.typeIdentifier() : nil
 
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before \(kind) body.")
-        let body = try block()
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before \(kind) body.")
+        let body = try self.block()
 
         return FunctionDeclaration(
             name: name, 
@@ -185,11 +186,11 @@ class Parser {
 
     func parameterList(allowNamelessParams: Bool = false) throws -> [Parameter] {
         var parameters: [Parameter] = []
-        if check(TokenType.RIGHT_PAREN) { return parameters }
+        if self.check(TokenType.RIGHT_PAREN) { return parameters }
     
         repeat {
-            parameters.append(try parameter(allowNamelessParams: allowNamelessParams))
-        } while match(TokenType.COMMA)
+            parameters.append(try self.parameter(allowNamelessParams: allowNamelessParams))
+        } while self.match(TokenType.COMMA)
 
         return parameters
     }
@@ -200,9 +201,9 @@ class Parser {
         var isVariadic: Bool = false
         var defaultValue: ASTNode?
 
-        if allowNamelessParams && check(TokenType.IDENTIFIER) && (checkNext(TokenType.RIGHT_PAREN) || checkNext(TokenType.COMMA) ) {
+        if allowNamelessParams && self.check(TokenType.IDENTIFIER) && (self.checkNext(TokenType.RIGHT_PAREN) || self.checkNext(TokenType.COMMA) ) {
             // Handle nameless parameter (only type)
-            let type = try typeIdentifier()
+            let type = try self.typeIdentifier()
             return Parameter(externalName: nil, internalName: Token(type: TokenType.IDENTIFIER, value: "_", line: 0, column: 0, endOfLine: false), type: type, isVariadic: false, defaultValue: nil)
         }
         
@@ -210,31 +211,31 @@ class Parser {
             // Handle "_ internalName: type"
             internalName = try consume(TokenType.IDENTIFIER, "Expect parameter internal name after '_'.")
         } 
-        else */if match(TokenType.IDENTIFIER) {
-            if check(TokenType.IDENTIFIER) {
+        else */if self.match(TokenType.IDENTIFIER) {
+            if self.check(TokenType.IDENTIFIER) {
                 // Handle "externalName internalName: type"
-                externalName = previous()
-                internalName = try consume(TokenType.IDENTIFIER, "Expect parameter internal name.")
+                externalName = self.previous()
+                internalName = try self.consume(TokenType.IDENTIFIER, "Expect parameter internal name.")
             } 
             else {
                 // Handle "internalAndExternalName: type"
-                internalName = previous()
+                internalName = self.previous()
                 externalName = internalName
             }
         } 
         else {
-            throw error(peek(), "Expect parameter name.")
+            throw self.error(self.peek(), "Expect parameter name.")
         }
 
-        try consume(TokenType.COLON, "Expect ':' after parameter name.")
-        let type = try typeIdentifier()
+        try self.consume(TokenType.COLON, "Expect ':' after parameter name.")
+        let type = try self.typeIdentifier()
 
-        if match(TokenType.DOT_DOT_DOT) {
+        if self.match(TokenType.DOT_DOT_DOT) {
             isVariadic = true
         }
 
-        if match(TokenType.EQUAL) {
-            defaultValue = try expression()
+        if self.match(TokenType.EQUAL) {
+            defaultValue = try self.expression()
         }
 
         return Parameter(
@@ -249,29 +250,29 @@ class Parser {
     func typeIdentifier() throws -> TypeIdentifier {
         var type: TypeIdentifier
 
-        if match(TokenType.LEFT_BRACKET) {
-            if checkNext(TokenType.COLON) {
-                let keyType = try typeIdentifier()
-                try consume(TokenType.COLON, "Expect ':' after dictionary key type.")
-                let valueType = try typeIdentifier()
-                try consume(TokenType.RIGHT_BRACKET, "Expect ']' after dictionary value type.")
+        if self.match(TokenType.LEFT_BRACKET) {
+            if self.checkNext(TokenType.COLON) {
+                let keyType = try self.typeIdentifier()
+                try self.consume(TokenType.COLON, "Expect ':' after dictionary key type.")
+                let valueType = try self.typeIdentifier()
+                try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after dictionary value type.")
                 type = TypeIdentifier.dictionary(keyType, valueType)
             } else {
-                let elementType = try typeIdentifier()
-                try consume(TokenType.RIGHT_BRACKET, "Expect ']' after array element type.")
+                let elementType = try self.typeIdentifier()
+                try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after array element type.")
                 type = TypeIdentifier.array(elementType)
             }
         } else {
             var identifier: String = ""
         
             repeat {
-                identifier = [identifier, try consume(TokenType.IDENTIFIER, "Expect type name.").value].joined(separator: ".")
-            } while match(TokenType.DOT)
+                identifier = [identifier, try self.consume(TokenType.IDENTIFIER, "Expect type name.").value].joined(separator: ".")
+            } while self.match(TokenType.DOT)
 
             type = TypeIdentifier.identifier(identifier)
         }
 
-        if match(TokenType.ATTACHED_QUESTION) {
+        if self.match(TokenType.ATTACHED_QUESTION) {
             type = TypeIdentifier.optional(type)
         }
 
@@ -279,62 +280,62 @@ class Parser {
     }
 
     func enumDeclaration() throws -> EnumDeclaration {
-        let name = try consume(TokenType.IDENTIFIER, "Expect enum name.")
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before enum cases.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect enum name.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before enum cases.")
 
         var cases: [EnumCase] = []
-        while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
-            try consume(TokenType.CASE, "Expect 'case' before enum case name.")
+        while !self.check(TokenType.RIGHT_BRACE) && !self.isAtEnd() {
+            try self.consume(TokenType.CASE, "Expect 'case' before enum case name.")
             
             repeat {
-                let caseName = try consume(TokenType.IDENTIFIER, "Expect enum case name.")
+                let caseName = try self.consume(TokenType.IDENTIFIER, "Expect enum case name.")
 
                 var rawValue: ASTNode? = nil
                 var associatedValues: [Parameter] = []
 
-                if match(TokenType.EQUAL) {
-                    rawValue = try expression()
+                if self.match(TokenType.EQUAL) {
+                    rawValue = try self.expression()
                 } 
-                else if match(TokenType.LEFT_PAREN) {
-                    associatedValues = try parameterList(allowNamelessParams: true)
-                    try consume(TokenType.RIGHT_PAREN, "Expect ')' after associated value(s).")
+                else if self.match(TokenType.LEFT_PAREN) {
+                    associatedValues = try self.parameterList(allowNamelessParams: true)
+                    try self.consume(TokenType.RIGHT_PAREN, "Expect ')' after associated value(s).")
                 }
 
                 cases.append(EnumCase(name: caseName, rawValue: rawValue, associatedValues: associatedValues))
-            } while match(TokenType.COMMA)
+            } while self.match(TokenType.COMMA)
         }
 
-        try consume(TokenType.RIGHT_BRACE, "Expect '}' after enum cases.")
+        try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after enum cases.")
 
         return EnumDeclaration(name: name, cases: cases)
     }
 
     func protocolDeclaration() throws -> ProtocolDeclaration {
-        let name = try consume(TokenType.IDENTIFIER, "Expect protocol name.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect protocol name.")
         
         var inheritedProtocols: [Token] = []
-        if match(TokenType.COLON) {
+        if self.match(TokenType.COLON) {
             repeat {
-                inheritedProtocols.append(try consume(TokenType.IDENTIFIER, "Expect inherited protocol name."))
-            } while match(TokenType.COMMA)
+                inheritedProtocols.append(try self.consume(TokenType.IDENTIFIER, "Expect inherited protocol name."))
+            } while self.match(TokenType.COMMA)
         }
 
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before protocol body.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before protocol body.")
         
         var members: [ASTNode] = []
-        while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
-            if match(TokenType.VAR, TokenType.LET) {
-                members.append(try protocolPropertyDeclaration())
+        while !self.check(TokenType.RIGHT_BRACE) && !self.isAtEnd() {
+            if self.match(TokenType.VAR, TokenType.LET) {
+                members.append(try self.protocolPropertyDeclaration())
             } 
-            else if match(TokenType.FUNC) {
-                members.append(try protocolMethodDeclaration())
+            else if self.match(TokenType.FUNC) {
+                members.append(try self.protocolMethodDeclaration())
             } 
             else {
-                throw error(peek(), "Expect property or method declaration in protocol.")
+                throw self.error(self.peek(), "Expect property or method declaration in protocol.")
             }
         }
 
-        try consume(TokenType.RIGHT_BRACE, "Expect '}' after protocol body.")
+        try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after protocol body.")
 
         return ProtocolDeclaration(
             name: name, 
@@ -344,26 +345,26 @@ class Parser {
     }
 
     func protocolPropertyDeclaration() throws -> ASTNode {
-        let isConstant = previous().type == TokenType.LET
-        let name = try consume(TokenType.IDENTIFIER, "Expect variable name.")
-        try consume(TokenType.COLON, "Expect ':' after property name.")
-        let propertyType = try typeIdentifier()
+        let isConstant = self.previous().type == TokenType.LET
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect variable name.")
+        try self.consume(TokenType.COLON, "Expect ':' after property name.")
+        let propertyType = try self.typeIdentifier()
 
         var getter = true
         var setter = false
 
-        if match(TokenType.LEFT_BRACE) {
+        if self.match(TokenType.LEFT_BRACE) {
             getter = false
             setter = false
-            if match(TokenType.GET) {
+            if self.match(TokenType.GET) {
                 getter = true
-                if match(TokenType.SET) { setter = true }
+                if self.match(TokenType.SET) { setter = true }
             } 
-            else if match(TokenType.SET) {
+            else if self.match(TokenType.SET) {
                 setter = true
-                if match(TokenType.GET) { getter = true }
+                if self.match(TokenType.GET) { getter = true }
             }
-            try consume(TokenType.RIGHT_BRACE, "Expect '}' after getter/setter specification.")
+            try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after getter/setter specification.")
         }
 
         return ProtocolPropertyDeclaration(
@@ -376,12 +377,12 @@ class Parser {
     }
 
     func protocolMethodDeclaration() throws -> ASTNode {
-        let name = try consume(TokenType.IDENTIFIER, "Expect method name.")
-        try consume(TokenType.LEFT_PAREN, "Expect '(' after method name.")
-        let parameters = try parameterList()
-        try consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect method name.")
+        try self.consume(TokenType.LEFT_PAREN, "Expect '(' after method name.")
+        let parameters = try self.parameterList()
+        try self.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
         
-        let returnType: TypeIdentifier? = match(TokenType.RIGHT_ARROW) ? try typeIdentifier() : nil 
+        let returnType: TypeIdentifier? = self.match(TokenType.RIGHT_ARROW) ? try self.typeIdentifier() : nil 
 
         return ProtocolMethodDeclaration(
             name: name, 
@@ -391,9 +392,9 @@ class Parser {
     }
 
     func typealiasDeclaration() throws -> TypealiasDeclaration {
-        let name = try consume(TokenType.IDENTIFIER, "Expect typealias name.")
-        try consume(TokenType.EQUAL, "Expect '=' after typealias name.")
-        let type = try typeIdentifier() 
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect typealias name.")
+        try self.consume(TokenType.EQUAL, "Expect '=' after typealias name.")
+        let type = try self.typeIdentifier() 
 
         return TypealiasDeclaration(name: name, type: type)
     }
@@ -401,35 +402,35 @@ class Parser {
     // MARK: - Statements
 
     func statement() throws -> ASTNode {
-        if match(TokenType.IF) { return try ifStatement() }
-        if match(TokenType.GUARD) { return try guardStatement() }
-        if match(TokenType.SWITCH) { return try switchStatement() }
-        if match(TokenType.FOR) { return try forStatement() }
-        if match(TokenType.WHILE) { return try whileStatement() }
-        if match(TokenType.REPEAT) { return try repeatStatement() }
-        if match(TokenType.RETURN) { return try returnStatement() }
-        if match(TokenType.BREAK) { return try breakStatement() }
-        if match(TokenType.CONTINUE) { return try continueStatement() }
-        if match(TokenType.DO) { return try doCatchStatement() }
-        if match(TokenType.THROW) { return try throwStatement() }
-        if match(TokenType.INDIRECT) { return try blankStatement() }
-        if match(TokenType.LEFT_BRACE) { return try block() }
-        return try expressionStatement()
+        if self.match(TokenType.IF) { return try self.ifStatement() }
+        if self.match(TokenType.GUARD) { return try self.guardStatement() }
+        if self.match(TokenType.SWITCH) { return try self.switchStatement() }
+        if self.match(TokenType.FOR) { return try self.forStatement() }
+        if self.match(TokenType.WHILE) { return try self.whileStatement() }
+        if self.match(TokenType.REPEAT) { return try self.repeatStatement() }
+        if self.match(TokenType.RETURN) { return try self.returnStatement() }
+        if self.match(TokenType.BREAK) { return try self.breakStatement() }
+        if self.match(TokenType.CONTINUE) { return try self.continueStatement() }
+        if self.match(TokenType.DO) { return try self.doCatchStatement() }
+        if self.match(TokenType.THROW) { return try self.throwStatement() }
+        if self.match(TokenType.INDIRECT) { return try self.blankStatement() }
+        if self.match(TokenType.LEFT_BRACE) { return try self.block() }
+        return try self.expressionStatement()
     }
 
     func ifStatement() throws -> ASTNode {
-        if match(TokenType.LET) {
-            return try ifLetStatement()
+        if self.match(TokenType.LET) {
+            return try self.ifLetStatement()
         }
 
-        let parens = match(TokenType.LEFT_PAREN)
-        let condition = try expression()
-        if parens { try consume(TokenType.RIGHT_PAREN, "Expect matching ')' after if condition.") }
+        let parens = self.match(TokenType.LEFT_PAREN)
+        let condition = try self.expression()
+        if parens { try self.consume(TokenType.RIGHT_PAREN, "Expect matching ')' after if condition.") }
 
-        try consume(TokenType.LEFT_BRACE, "Expect '{' after if condition.")
-        let thenBranch = try block()
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' after if condition.")
+        let thenBranch = try self.block()
         
-        let elseBranch: ASTNode? = match(TokenType.ELSE) ? try statement() : nil
+        let elseBranch: ASTNode? = self.match(TokenType.ELSE) ? try self.statement() : nil
 
         return IfStatement(
             condition: condition, 
@@ -439,19 +440,19 @@ class Parser {
     }
 
     func ifLetStatement() throws -> ASTNode {
-        let name = try consume(TokenType.IDENTIFIER, "Expect variable name after 'if let'.")
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect variable name after 'if let'.")
         let value: ASTNode?
-        if match(TokenType.EQUAL) {
-            value = try expression()
+        if self.match(TokenType.EQUAL) {
+            value = try self.expression()
         } 
         else {
             value = nil
         }
 
-        try consume(TokenType.LEFT_BRACE, "Expect '{' after if let condition.")
-        let thenBranch = try block()
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' after if let condition.")
+        let thenBranch = try self.block()
 
-        let elseBranch: ASTNode? = match(TokenType.ELSE) ? try statement() : nil
+        let elseBranch: ASTNode? = self.match(TokenType.ELSE) ? try self.statement() : nil
 
         return IfLetStatement(
             name: name, 
@@ -462,62 +463,62 @@ class Parser {
     }
 
     func guardStatement() throws -> ASTNode {
-        if match(TokenType.LET) {
-            return try guardLetStatement()
+        if self.match(TokenType.LET) {
+            return try self.guardLetStatement()
         }
 
-        let condition = try expression()
-        try consume(TokenType.ELSE, "Expect 'else' after guard condition.")
-        try consume(TokenType.LEFT_BRACE, "Expect '{' after guard condition.")
-        let body = try block()
+        let condition = try self.expression()
+        try self.consume(TokenType.ELSE, "Expect 'else' after guard condition.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' after guard condition.")
+        let body = try self.block()
         return GuardStatement(condition: condition, body: body)
     }
 
     func guardLetStatement() throws -> ASTNode {
-        let name = try consume(TokenType.IDENTIFIER, "Expect variable name after 'guard let'.")
-        try consume(TokenType.EQUAL, "Expect '=' after variable name in guard let.")
-        let value = try expression()
-        try consume(TokenType.ELSE, "Expect 'else' after guard let condition.")
-        try consume(TokenType.LEFT_BRACE, "Expect '{' after guard let condition.")
-        let body = try block()
+        let name = try self.consume(TokenType.IDENTIFIER, "Expect variable name after 'guard let'.")
+        try self.consume(TokenType.EQUAL, "Expect '=' after variable name in guard let.")
+        let value = try self.expression()
+        try self.consume(TokenType.ELSE, "Expect 'else' after guard let condition.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' after guard let condition.")
+        let body = try self.block()
         return GuardLetStatement(name: name, value: value, body: body)
     }
 
     func switchStatement() throws -> ASTNode {
-        let expression = try expression()
-        try consume(TokenType.LEFT_BRACE, "Expect '{' after switch expression.")
+        let expression = try self.expression()
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' after switch expression.")
 
         var cases: [SwitchCase] = []
         var defaultCase: [ASTNode]?
 
-        while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
-            if match(TokenType.CASE) {
+        while !self.check(TokenType.RIGHT_BRACE) && !self.isAtEnd() {
+            if self.match(TokenType.CASE) {
                 var caseExpressions: [ASTNode] = []
                 repeat {
                     caseExpressions.append(try self.expression())
                 } while match(TokenType.COMMA)
 
-                try consume(TokenType.COLON, "Expect ':' after case value.")
+                try self.consume(TokenType.COLON, "Expect ':' after case value.")
                 var statements: [ASTNode] = []
-                while !check(TokenType.CASE) && !check(TokenType.DEFAULT) && !check(TokenType.RIGHT_BRACE) {
-                    statements.append(try statement())
+                while !self.check(TokenType.CASE) && !self.check(TokenType.DEFAULT) && !self.check(TokenType.RIGHT_BRACE) {
+                    statements.append(try self.statement())
                 }
                 cases.append(SwitchCase(expressions: caseExpressions, statements: statements))
             } 
-            else if match(TokenType.DEFAULT) {
-                try consume(TokenType.COLON, "Expect ':' after 'default'.")
+            else if self.match(TokenType.DEFAULT) {
+                try self.consume(TokenType.COLON, "Expect ':' after 'default'.")
                 var statements: [ASTNode] = []
-                while !check(TokenType.RIGHT_BRACE) {
-                    statements.append(try statement())
+                while !self.check(TokenType.RIGHT_BRACE) {
+                    statements.append(try self.statement())
                 }
                 defaultCase = statements
             } 
             else {
-                throw error(peek(), "Expect 'case' or 'default' in switch statement.")
+                throw self.error(self.peek(), "Expect 'case' or 'default' in switch statement.")
             }
         }
 
-        try consume(TokenType.RIGHT_BRACE, "Expect '}' after switch cases.")
+        try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after switch cases.")
 
         return SwitchStatement(
             expression: expression, 
@@ -527,13 +528,13 @@ class Parser {
     }
 
     func forStatement() throws -> ASTNode {
-        let paren = match(TokenType.LEFT_PAREN)
-        let variable = try consume(TokenType.IDENTIFIER, "Expect variable name in for-in loop.")
-        try consume(TokenType.IN, "Expect 'in' after variable name in for-in loop.")
-        let iterable = try expression()
-        if paren { try consume(TokenType.RIGHT_PAREN, "Expect matching ')' after for-in loop.") }
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before for loop body.")
-        let body = try block()
+        let paren = self.match(TokenType.LEFT_PAREN)
+        let variable = try self.consume(TokenType.IDENTIFIER, "Expect variable name in for-in loop.")
+        try self.consume(TokenType.IN, "Expect 'in' after variable name in for-in loop.")
+        let iterable = try self.expression()
+        if paren { try self.consume(TokenType.RIGHT_PAREN, "Expect matching ')' after for-in loop.") }
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before for loop body.")
+        let body = try self.block()
         return ForStatement(
             variable: variable, 
             iterable: iterable, 
@@ -542,29 +543,29 @@ class Parser {
     }
 
     func whileStatement() throws -> ASTNode {
-        let condition = try expression()
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before while loop body.")
-        let body = try block()
+        let condition = try self.expression()
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before while loop body.")
+        let body = try self.block()
         return WhileStatement(condition: condition, body: body)
     }
 
     func repeatStatement() throws -> ASTNode {
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before repeat loop body.")
-        let body = try block()
-        try consume(TokenType.WHILE, "Expect 'while' after repeat loop body.")
-        let paren = match(TokenType.LEFT_PAREN)
-        let condition = try expression()
-        if paren { try consume(TokenType.RIGHT_PAREN, "Expect matching ')' after repeat while condition.") }
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before repeat loop body.")
+        let body = try self.block()
+        try self.consume(TokenType.WHILE, "Expect 'while' after repeat loop body.")
+        let paren = self.match(TokenType.LEFT_PAREN)
+        let condition = try self.expression()
+        if paren { try self.consume(TokenType.RIGHT_PAREN, "Expect matching ')' after repeat while condition.") }
         return RepeatStatement(body: body, condition: condition)
     }
 
     func returnStatement() throws -> ASTNode {
         let token = previous()
         var value: ASTNode?
-        if !token.endOfLine && !check(TokenType.RIGHT_BRACE) && !check(TokenType.SEMICOLON) && !isAtEnd() {
-            value = try expression()
+        if !token.endOfLine && !self.check(TokenType.RIGHT_BRACE) && !self.check(TokenType.SEMICOLON) && !self.isAtEnd() {
+            value = try self.expression()
         }
-        match(TokenType.SEMICOLON)
+        self.match(TokenType.SEMICOLON)
         return ReturnStatement(value: value)
     }
 
@@ -581,16 +582,16 @@ class Parser {
     }
 
     func doCatchStatement() throws -> ASTNode {
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before do statement.")
-        let body = try block()
-        try consume(TokenType.CATCH, "Expect 'catch' after do statement.")
-        try consume(TokenType.LEFT_BRACE, "Expect '{' before catch block.")
-        let catchBlock = try block()
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before do statement.")
+        let body = try self.block()
+        try self.consume(TokenType.CATCH, "Expect 'catch' after do statement.")
+        try self.consume(TokenType.LEFT_BRACE, "Expect '{' before catch block.")
+        let catchBlock = try self.block()
         return DoCatchStatement(body: body, catchBlock: catchBlock)
     }
 
     func throwStatement() throws -> ASTNode {
-        let expression = try expression()
+        let expression = try self.expression()
         return ThrowStatement(expression: expression)
     }
         
@@ -598,13 +599,15 @@ class Parser {
         var statements: [ASTNode] = []
         var inBodyParameters: [Parameter] = []
 
-        for x in current..<tokens.count {
-            if tokens[x].type == TokenType.IN {
-                inBodyParameters = try parseInBodyArguments()
-                break
+        if !previous().endOfLine {
+            for x in current..<tokens.count {
+                if tokens[x].type == TokenType.IN {
+                    inBodyParameters = try self.parseInBodyArguments()
+                    break
+                }
+                
+                if tokens[x].endOfLine { break }
             }
-
-            if tokens[x].endOfLine { break }
         }
 
         for x in current..<tokens.count {
@@ -612,16 +615,16 @@ class Parser {
 
             if tokens[x].type == TokenType.DOLLAR && x+1 < tokens.count && tokens[x+1].type == TokenType.INT {
                 let id = "$" + tokens[x + 1].value
-                inBodyParameters.append(Parameter(externalName: nil, internalName: Token(type: .IDENTIFIER, value: id, line: 0, column: 0, endOfLine: false), type: TypeIdentifier.identifier(id), isVariadic: false, defaultValue: nil))
+                inBodyParameters.append(Parameter(externalName: nil, internalName: Token(type: TokenType.IDENTIFIER, value: id, line: 0, column: 0, endOfLine: false), type: TypeIdentifier.identifier(id), isVariadic: false, defaultValue: nil))
             }
         }
         
-        while !check(TokenType.RIGHT_BRACE) && !isAtEnd() {
-            if let statement = declaration(inScopeOf: nil) {
+        while !self.check(TokenType.RIGHT_BRACE) && !self.isAtEnd() {
+            if let statement = self.declaration(inScopeOf: nil) {
                 statements.append(statement)
             }
         }
-        try consume(TokenType.RIGHT_BRACE, "Expect '}' after block.")
+        try self.consume(TokenType.RIGHT_BRACE, "Expect '}' after block.")
 
         return BlockStatement(statements: statements, inBodyParameters: inBodyParameters)
     }
@@ -630,51 +633,51 @@ class Parser {
         var arguments: [Parameter] = []
         
         repeat {
-            let name = try consume(TokenType.IDENTIFIER, "Expect argument name.")
-            arguments.append(Parameter(externalName: nil, internalName: name, type: .identifier(name.value), isVariadic: false, defaultValue: nil))
-        } while match(TokenType.COMMA)
+            let name = try self.consume(TokenType.IDENTIFIER, "Expect argument name.")
+            arguments.append(Parameter(externalName: nil, internalName: name, type: TypeIdentifier.identifier(name.value), isVariadic: false, defaultValue: nil))
+        } while self.match(TokenType.COMMA)
         
-        try consume(TokenType.IDENTIFIER, "Expect 'in' after in-body arguments.")
+        try self.consume(TokenType.IDENTIFIER, "Expect 'in' after in-body arguments.")
         
         return arguments
     }
 
     func expressionStatement() throws -> ASTNode {
-        let expression = try expression()
-        match(TokenType.SEMICOLON)
+        let expression = try self.expression()
+        self.match(TokenType.SEMICOLON)
         return ExpressionStatement(expression: expression)
     }
 
     // MARK: - Expressions
 
     func expression() throws -> ASTNode {
-        return try assignment()
+        return try self.assignment()
     }
 
     func assignment() throws -> ASTNode {
-        let expr = try ternary()
+        let expr = try self.ternary()
 
-        if match(TokenType.EQUAL, TokenType.PLUS_EQUAL, TokenType.MINUS_EQUAL) {
-            let equals = previous()
-            let value = try assignment()
+        if self.match(TokenType.EQUAL, TokenType.PLUS_EQUAL, TokenType.MINUS_EQUAL) {
+            let equals = self.previous()
+            let value = try self.assignment()
             
             if expr is VariableExpression || expr is IndexExpression || expr is GetExpression || expr is OptionalChainingExpression {
                 return AssignmentExpression(target: expr, value: value, op: equals.type)
             }
 
-            throw error(equals, "Invalid assignment target.")
+            throw self.error(equals, "Invalid assignment target.")
         }
 
         return expr
     }
 
     func ternary() throws -> ASTNode {
-        let condition = try coalescing()
+        let condition = try self.coalescing()
 
-        if match(TokenType.QUESTION) {
-            let thenBranch = try expression()
-            try consume(TokenType.COLON, "Expect ':' in ternary expression.")
-            let elseBranch = try expression()
+        if self.match(TokenType.QUESTION) {
+            let thenBranch = try self.expression()
+            try self.consume(TokenType.COLON, "Expect ':' in ternary expression.")
+            let elseBranch = try self.expression()
             return TernaryExpression(condition: condition, thenBranch: thenBranch, elseBranch: elseBranch)
         }
 
@@ -682,11 +685,11 @@ class Parser {
     }
 
     func coalescing() throws -> ASTNode {
-        var expr = try or()
+        var expr = try self.or()
 
-        while match(TokenType.QUESTION_QUESTION) {
-            let op = previous()
-            let right = try or()
+        while self.match(TokenType.QUESTION_QUESTION) {
+            let op = self.previous()
+            let right = try self.or()
             expr = BinaryExpression(left: expr, right: right, op: op.type)
         }
 
@@ -694,11 +697,11 @@ class Parser {
     }
 
     func or() throws -> ASTNode {
-        var expr = try and()
+        var expr = try self.and()
 
-        while match(TokenType.PIPE_PIPE) {
-            let op = previous()
-            let right = try and()
+        while self.match(TokenType.PIPE_PIPE) {
+            let op = self.previous()
+            let right = try self.and()
             expr = LogicalExpression(left: expr, right: right, op: op.type)
         }
 
@@ -706,11 +709,11 @@ class Parser {
     }
 
     func and() throws -> ASTNode {
-        var expr = try equality()
+        var expr = try self.equality()
 
-        while match(TokenType.AMPERSAND_AMPERSAND) {
-            let op = previous()
-            let right = try equality()
+        while self.match(TokenType.AMPERSAND_AMPERSAND) {
+            let op = self.previous()
+            let right = try self.equality()
             expr = LogicalExpression(left: expr, right: right, op: op.type)
         }
 
@@ -718,11 +721,11 @@ class Parser {
     }
 
     func equality() throws -> ASTNode {
-        var expr = try comparison()
+        var expr = try self.comparison()
 
-        while match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL) {
-            let op = previous()
-            let right = try comparison()
+        while self.match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL) {
+            let op = self.previous()
+            let right = try self.comparison()
             expr = BinaryExpression(left: expr, right: right, op: op.type)
         }
 
@@ -730,11 +733,11 @@ class Parser {
     }
 
     func comparison() throws -> ASTNode {
-        var expr = try isType()
+        var expr = try self.isType()
 
-        while match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL) {
-            let op = previous()
-            let right = try isType()
+        while self.match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL) {
+            let op = self.previous()
+            let right = try self.isType()
             expr = BinaryExpression(left: expr, right: right, op: op.type)
         }
 
@@ -742,10 +745,10 @@ class Parser {
     }
 
     func isType() throws -> ASTNode {
-        var expr = try range()
+        var expr = try self.range()
 
-        if match(TokenType.IS) {
-            let type = try typeIdentifier()
+        if self.match(TokenType.IS) {
+            let type = try self.typeIdentifier()
             expr = IsExpression(expression: expr, type: type)
         }
 
@@ -753,11 +756,11 @@ class Parser {
     }
 
     func range() throws -> ASTNode {
-        var expr = try term()
+        var expr = try self.term()
 
-        while match(TokenType.DOT_DOT_DOT, TokenType.DOT_DOT_LESS) {
-            let op = previous()
-            let right = try term()
+        while self.match(TokenType.DOT_DOT_DOT, TokenType.DOT_DOT_LESS) {
+            let op = self.previous()
+            let right = try self.term()
             expr = BinaryRangeExpression(left: expr, right: right, op: op.type)
         }
 
@@ -765,11 +768,11 @@ class Parser {
     }
 
     func term() throws -> ASTNode {
-        var expr = try factor()
+        var expr = try self.factor()
 
-        while match(TokenType.MINUS, TokenType.PLUS) {  
-            let op = previous()
-            let right = try factor()
+        while self.match(TokenType.MINUS, TokenType.PLUS) {  
+            let op = self.previous()
+            let right = try self.factor()
             expr = BinaryExpression(left: expr, right: right, op: op.type)
         }
 
@@ -777,11 +780,11 @@ class Parser {
     }
 
     func factor() throws -> ASTNode {
-        var expr = try asType()
+        var expr = try self.asType()
 
-        while match(TokenType.SLASH, TokenType.STAR) {
-            let op = previous()
-            let right = try asType()
+        while self.match(TokenType.SLASH, TokenType.STAR) {
+            let op = self.previous()
+            let right = try self.asType()
             expr = BinaryExpression(left: expr, right: right, op: op.type)
         }
 
@@ -789,11 +792,11 @@ class Parser {
     }
 
     func asType() throws -> ASTNode {
-        var expr = try tryExpression()
+        var expr = try self.tryExpression()
 
-        if match(TokenType.AS) {
-            let isOptional = match(TokenType.ATTACHED_QUESTION)
-            let isForceUnwrap = !isOptional && match(TokenType.ATTACHED_BANG)
+        if self.match(TokenType.AS) {
+            let isOptional = self.match(TokenType.ATTACHED_QUESTION)
+            let isForceUnwrap = !isOptional && self.match(TokenType.ATTACHED_BANG)
             let type = try typeIdentifier()
             expr = AsExpression(expression: expr, type: type, isOptional: isOptional, isForceUnwrap: isForceUnwrap)
         }
@@ -802,60 +805,60 @@ class Parser {
     }
 
     func tryExpression() throws -> ASTNode {
-        if match(TokenType.TRY) {
-            let isOptional = match(TokenType.ATTACHED_QUESTION)
-            let isForceUnwrap = !isOptional && match(TokenType.ATTACHED_BANG)
-            let expression = try call()
+        if self.match(TokenType.TRY) {
+            let isOptional = self.match(TokenType.ATTACHED_QUESTION)
+            let isForceUnwrap = !isOptional && self.match(TokenType.ATTACHED_BANG)
+            let expression = try self.call()
             return TryExpression(expression: expression, isOptional: isOptional, isForceUnwrap: isForceUnwrap)
         }
 
-        return try unary()
+        return try self.unary()
     }
 
     func unary() throws -> ASTNode {
-        if match(TokenType.BANG, TokenType.MINUS) {
-            let op = previous()
-            let right = try unary()
+        if self.match(TokenType.BANG, TokenType.MINUS) {
+            let op = self.previous()
+            let right = try self.unary()
             return UnaryExpression(op: op.type, operand: right)
         }
 
-        return try call()
+        return try self.call()
     }
 
     func call() throws -> ASTNode {
-        var expr = try primary()
+        var expr = try self.primary()
 
         while true {
-            if match(TokenType.LEFT_PAREN) {
-                expr = try finishCall(expr)
+            if self.match(TokenType.LEFT_PAREN) {
+                expr = try self.finishCall(expr)
             } 
-            else if match(TokenType.DOT) {
-                let name = try consume(TokenType.IDENTIFIER, "Expect property name after '.'.")
+            else if self.match(TokenType.DOT) {
+                let name = try self.consume(TokenType.IDENTIFIER, "Expect property name after '.'.")
                 expr = GetExpression(object: expr, name: name)
             } 
-            else if match(TokenType.LEFT_BRACKET) {
-                let index = try expression()
-                try consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.")
+            else if self.match(TokenType.LEFT_BRACKET) {
+                let index = try self.expression()
+                try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.")
                 expr = IndexExpression(object: expr, index: index)
             } 
-            else if match(TokenType.ATTACHED_QUESTION) || match(TokenType.ATTACHED_BANG) {
-                let forceUnwrap = previous().type == TokenType.ATTACHED_BANG
+            else if self.match(TokenType.ATTACHED_QUESTION) || self.match(TokenType.ATTACHED_BANG) {
+                let forceUnwrap = self.previous().type == TokenType.ATTACHED_BANG
                 expr = OptionalChainingExpression(object: expr, forceUnwrap: forceUnwrap)
 
-                if match(TokenType.LEFT_PAREN) {
-                    expr = try finishCall(expr, isOptional: true)
+                if self.match(TokenType.LEFT_PAREN) {
+                    expr = try self.finishCall(expr, isOptional: true)
                 } 
-                else if match(TokenType.IDENTIFIER) {
-                    let name = previous()
+                else if self.match(TokenType.IDENTIFIER) {
+                    let name = self.previous()
                     expr = GetExpression(object: expr, name: name, isOptional: true)
                 } 
-                else if match(TokenType.LEFT_BRACKET) {
-                    let index = try expression()
-                    try consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.")
+                else if self.match(TokenType.LEFT_BRACKET) {
+                    let index = try self.expression()
+                    try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.")
                     expr = IndexExpression(object: expr, index: index, isOptional: true)
                 } 
                 else if !forceUnwrap {
-                    throw error(peek(), "Expect property, subscript, or method call after '?'.")
+                    throw self.error(self.peek(), "Expect property, subscript, or method call after '?'.")
                 }
             }
             else {
@@ -868,118 +871,118 @@ class Parser {
 
     func finishCall(_ callee: ASTNode, isOptional: Bool = false) throws -> ASTNode {
         var arguments: [Argument] = []
-        if !check(TokenType.RIGHT_PAREN) {
+        if !self.check(TokenType.RIGHT_PAREN) {
             repeat {
                 var label: Token? = nil
-                if check(TokenType.IDENTIFIER) && checkNext(TokenType.COLON) {
-                    label = try consume(TokenType.IDENTIFIER, "Expect argument label.")
-                    try consume(TokenType.COLON, "Expect ':' after argument label.")
+                if self.check(TokenType.IDENTIFIER) && self.checkNext(TokenType.COLON) {
+                    label = try self.consume(TokenType.IDENTIFIER, "Expect argument label.")
+                    try self.consume(TokenType.COLON, "Expect ':' after argument label.")
                 }
-                let value = try expression()
+                let value = try self.expression()
                 arguments.append(Argument(label: label, value: value))
-            } while match(TokenType.COMMA)
+            } while self.match(TokenType.COMMA)
         }
-        try consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.")
+        try self.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.")
 
         return CallExpression(callee: callee, arguments: arguments, isOptional: isOptional)
     }
 
     func primary() throws -> ASTNode {
-        if match(TokenType.FALSE) { return LiteralExpression(value: false) }
-        if match(TokenType.TRUE) { return LiteralExpression(value: true) }
-        if match(TokenType.NIL) { return LiteralExpression(value: nil) }
-        if match(TokenType.SELF) { return SelfExpression() }
+        if self.match(TokenType.FALSE) { return LiteralExpression(value: false) }
+        if self.match(TokenType.TRUE) { return LiteralExpression(value: true) }
+        if self.match(TokenType.NIL) { return LiteralExpression(value: nil) }
+        if self.match(TokenType.SELF) { return SelfExpression() }
         
-        if match(TokenType.STRING) { 
+        if self.match(TokenType.STRING) { 
             return StringLiteralExpression(value: previous().value) 
         }
 
-        if match(TokenType.STRING_MULTILINE) { 
+        if self.match(TokenType.STRING_MULTILINE) { 
             return StringLiteralExpression(value: previous().value, isMultiLine: true) 
         }
 
-        if match(TokenType.INT) { 
-            if let value = Int(previous().value) {
+        if self.match(TokenType.INT) { 
+            if let value = Int(self.previous().value) {
                 return IntLiteralExpression(value: value)
             }
             else {
-                throw error(previous(), "Invalid number literal.")
+                throw self.error(self.previous(), "Invalid number literal.")
             }
         }
         
-        if match(TokenType.DOUBLE) { 
-            if let value = Double(previous().value) {
+        if self.match(TokenType.DOUBLE) { 
+            if let value = Double(self.previous().value) {
                 return DoubleLiteralExpression(value: value)
             }
             else {
-                throw error(previous(), "Invalid number literal.")
+                throw self.error(self.previous(), "Invalid number literal.")
             }
         }
 
-        if match(TokenType.IDENTIFIER) { 
-            return VariableExpression(name: previous()) 
+        if self.match(TokenType.IDENTIFIER) { 
+            return VariableExpression(name: self.previous()) 
         }
 
-        if match(TokenType.DOLLAR) {
-            let index = try consume(TokenType.INT, "Expect argument index after '$.'").value
-            return VariableExpression(name: Token(type: .IDENTIFIER, value: "$" + index, line: 0, column: 0, endOfLine: false))
+        if self.match(TokenType.DOLLAR) {
+            let index = try self.consume(TokenType.INT, "Expect argument index after '$.'").value
+            return VariableExpression(name: Token(type: TokenType.IDENTIFIER, value: "$" + index, line: 0, column: 0, endOfLine: false))
         }
 
-        if match(TokenType.LEFT_PAREN) {
-            let expr = try expression()
-            try consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.")
+        if self.match(TokenType.LEFT_PAREN) {
+            let expr = try self.expression()
+            try self.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.")
             return GroupingExpression(expression: expr)
         }
 
-        if match(TokenType.LEFT_BRACKET) {
-            return try arrayOrDictionaryLiteral()
+        if self.match(TokenType.LEFT_BRACKET) {
+            return try self.arrayOrDictionaryLiteral()
         }
 
-        throw error(peek(), "Expect expression.")
+        throw self.error(self.peek(), "Expect expression.")
     }
 
     func arrayOrDictionaryLiteral() throws -> ASTNode {
-        if match(TokenType.COLON) {
-            try consume(TokenType.RIGHT_BRACKET, "Expect ']' after empty dictionary literal.")
+        if self.match(TokenType.COLON) {
+            try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after empty dictionary literal.")
             return DictionaryLiteralExpression(elements: [])
         }
 
-        if match(TokenType.RIGHT_BRACKET) {
+        if self.match(TokenType.RIGHT_BRACKET) {
             return ArrayLiteralExpression(elements: [])
         }
 
         let firstElement = try expression()
 
-        if match(TokenType.COLON) {
-            return try finishDictionaryLiteral(firstElement)
+        if self.match(TokenType.COLON) {
+            return try self.finishDictionaryLiteral(firstElement)
         } else {
-            return try finishArrayLiteral(firstElement)
+            return try self.finishArrayLiteral(firstElement)
         }
     }
 
     func finishArrayLiteral(_ firstElement: ASTNode) throws -> ASTNode {
         var elements = [firstElement]
-        while match(TokenType.COMMA) {
-            if check(TokenType.RIGHT_BRACKET) { break }
-            elements.append(try expression())
+        while self.match(TokenType.COMMA) {
+            if self.check(TokenType.RIGHT_BRACKET) { break }
+            elements.append(try self.expression())
         }
-        try consume(TokenType.RIGHT_BRACKET, "Expect ']' after array elements.")
+        try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after array elements.")
         return ArrayLiteralExpression(elements: elements)
     }
 
     func finishDictionaryLiteral(_ firstKey: ASTNode) throws -> ASTNode {
         var elements: [KeyValuePair] = []
-        let firstValue = try expression()
+        let firstValue = try self.expression()
         elements.append(KeyValuePair(key: firstKey, value: firstValue))
 
-        while match(TokenType.COMMA) {
-            if check(TokenType.RIGHT_BRACKET) { break }
-            let key = try expression()
-            try consume(TokenType.COLON, "Expect ':' after dictionary key.")
+        while self.match(TokenType.COMMA) {
+            if self.check(TokenType.RIGHT_BRACKET) { break }
+            let key = try self.expression()
+            try self.consume(TokenType.COLON, "Expect ':' after dictionary key.")
             let value = try expression()
             elements.append(KeyValuePair(key: key, value: value))
         }
-        try consume(TokenType.RIGHT_BRACKET, "Expect ']' after dictionary pairs.")
+        try self.consume(TokenType.RIGHT_BRACKET, "Expect ']' after dictionary pairs.")
         return DictionaryLiteralExpression(elements: elements)
     }
 
@@ -988,8 +991,8 @@ class Parser {
     @discardableResult
     func match(_ types: TokenType...) -> Bool {
         for type in types {
-            if check(type) {
-                advance()
+            if self.check(type) {
+                self.advance()
                 return true
             }
         }
@@ -998,54 +1001,58 @@ class Parser {
 
     @discardableResult
     func consume(_ type: TokenType, _ message: String) throws -> Token {
-        if check(type) { return advance() }
-        throw error(peek(), message)
+        if self.check(type) { return self.advance() }
+        throw self.error(self.peek(), message)
     }
 
     func check(_ type: TokenType) -> Bool {
-        if isAtEnd() { return false }
-        return peek().type == type
+        if self.isAtEnd() { return false }
+        return self.peek().type == type
     }
 
     func checkNext(_ type: TokenType) -> Bool {
-        if isAtEnd() { return false }
-        if current + 1 >= tokens.count { return false }
-        return tokens[current + 1].type == type
+        if self.isAtEnd() { return false }
+        if self.current + 1 >= self.tokens.count { return false }
+        return self.tokens[self.current + 1].type == type
     }
 
     @discardableResult
     func advance() -> Token {
-        if !isAtEnd() { current += 1 }
-        return previous()
+        if !self.isAtEnd() { self.current += 1 }
+        return self.previous()
     }
     
     func isAtEnd() -> Bool {
-        return peek().type == TokenType.EOF
+        return self.peek().type == TokenType.EOF
     }
 
     func peek() -> Token {
-        return tokens[current]
+        return self.tokens[self.current]
     }
 
     func previous() -> Token {
-        return tokens[current - 1]
+        return self.tokens[self.current - 1]
     }
     
     func next() -> Token {
-        return tokens[current + 1]
+        return self.tokens[self.current + 1]
     }
     
     func error(_ token: Token, _ message: String) -> Error {
         print("Error at '\(token.value)', line \(token.line), column \(token.column): \(message)")
+        print(token.value)
+        print(token.line)
+        print(token.column)
+        print(message)
         return ParserError(message)
     }
 
     func synchronize() {
-        advance()
-        while !isAtEnd() {
-            if previous().type == TokenType.SEMICOLON { return }
+        self.advance()
+        while !self.isAtEnd() {
+            if self.previous().type == TokenType.SEMICOLON { return }
 
-            switch peek().type {
+            switch self.peek().type {
                 case TokenType.FUNC,
                      TokenType.VAR,
                      TokenType.LET,
@@ -1064,7 +1071,7 @@ class Parser {
                 default:
                     break
             }
-            advance()
+            self.advance()
         }
     }
 }

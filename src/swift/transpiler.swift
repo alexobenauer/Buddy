@@ -7,15 +7,14 @@ struct TranspilerError: Error {
 }
 
 struct JSTranspiler: Transpiler {
-    let emitTS: Bool = false // TODO: Remove
-    let minimalRuntime: Bool
+    let managedRuntime: Bool
     
-    init(minimalRuntime: Bool = true) {
-        self.minimalRuntime = minimalRuntime
+    init(managedRuntime: Bool = false) {
+        self.managedRuntime = managedRuntime
     }
 
     func transpile(ast: [ASTNode]) -> String {
-        return runtime(minimalRuntime: minimalRuntime) + "\n\n// Compiled code\n\n" + ast.map({ transpileNode($0) }).joined(separator: "\n")
+        return runtime(managedRuntime: managedRuntime) + "\n\n// Compiled code\n\n" + ast.map({ transpileNode($0) }).joined(separator: "\n")
     }
 
     private func transpileNode(_ node: ASTNode, isInClass: Bool = false) -> String {
@@ -77,7 +76,7 @@ struct JSTranspiler: Transpiler {
         let name = transpileIdentifier(node.name.value)
         let type = transpileType(node.type)
         
-        if minimalRuntime {
+        if !self.managedRuntime {
             let initializer = node.initializer != nil ? " = \(transpileExpression(node.initializer!))" : ""
             return "\(keyword) \(name)\(initializer);"
         }
@@ -100,20 +99,16 @@ struct JSTranspiler: Transpiler {
         let inheritedTypes = node.inheritedTypes.map { $0.value }.joined(separator: ", ")
         let members = node.members.map { transpileNode($0, isInClass: true) }.joined(separator: "\n  ")
         
-        if emitTS {
-            return "interface \(name)\(inheritedTypes.isEmpty ? "" : " extends \(inheritedTypes)") {\n  \(members)\n}"
-        } else {
-            var constructor = ""
-            if !node.members.contains(where: { node in
-                if let node = node as? FunctionDeclaration {
-                    return node.name.value == "init"
-                }
-                return false
-            }) {
-                constructor = "  constructor(params = {}) {\n    Object.assign(this, params);\n  }\n\n"
+        var constructor = ""
+        if !node.members.contains(where: { node in
+            if let node = node as? FunctionDeclaration {
+                return node.name.value == "init"
             }
-            return "class \(name) {\n\(constructor)  \(members)\n}"
+            return false
+        }) {
+            constructor = "  constructor(params = {}) {\n    Object.assign(this, params);\n  }\n\n"
         }
+        return "class \(name) {\n\(constructor)  \(members)\n}"
     }
 
     private func transpileClassDeclaration(_ node: ClassDeclaration) -> String {
@@ -131,24 +126,24 @@ struct JSTranspiler: Transpiler {
 
         let name = node.name.value == "init" ? "constructor" : transpileIdentifier(node.name.value)
         let params = "params = {}"
-        let returnType = emitTS && node.returnType != nil ? ": \(transpileType(node.returnType!))" : ""
         let paramsInBody = transpileParamsIntoBody(node.parameters)
         let bodyBlock = transpileBlock(node.body)
         let body = "\(paramsInBody)\n\(bodyBlock)"
 
         let staticKeyword = node.isStatic ? "static " : ""
         
-        return "\(staticKeyword)\(node.kind == .function ? "function " : "")\(name)(\(params))\(returnType) { \(body) }"
+        return "\(staticKeyword)\(node.kind == .function ? "function " : "")\(name)(\(params)) { \(body) }"
     }
 
     private func transpileParamsIntoBody(_ parameters: [Parameter]) -> String {
         if parameters.count == 0 { return "" }
         
-        let paramDestructuring = parameters.map { param in
+        let paramDestructuring = parameters.enumerated().map { index, param in
             let externalName = param.externalName?.value ?? param.internalName.value
             let internalName = param.internalName.value
+            let adjustedExternalName = externalName == "_" ? "_\(index + 1)" : externalName
             let defaultValue = param.defaultValue != nil ? " = \(transpileExpression(param.defaultValue!))" : ""
-            return externalName == internalName ? "\(internalName)\(defaultValue)" : "\(externalName): \(internalName)\(defaultValue)"
+            return adjustedExternalName == internalName ? "\(internalName)\(defaultValue)" : "\(adjustedExternalName): \(internalName)\(defaultValue)"
         }.joined(separator: ", ")
         
         return "const { \(paramDestructuring) } = params;"
@@ -157,24 +152,16 @@ struct JSTranspiler: Transpiler {
     private func transpileEnumDeclaration(_ node: EnumDeclaration, isInClass: Bool = false) -> String {
         let name = transpileIdentifier(node.name.value)
         
-        if emitTS {
-          let cases = node.cases.map { c in
+        let cases = node.cases.map { c in
             let caseName = c.name.value
-                return "\(caseName) = '\(caseName)'"
-            }.joined(separator: ",\n  ")
-            return "enum \(name) {\n  \(cases)\n}"
-        } else {
-            let cases = node.cases.map { c in
-                let caseName = c.name.value
-                return "\(caseName): '\(caseName)'"
-            }.joined(separator: ",\n  ")
+            return "\(caseName): '\(caseName)'"
+        }.joined(separator: ",\n  ")
 
-            if minimalRuntime {
-                return "\(isInClass ? "static ":"const ")\(name) = Object.freeze({\n  \(cases)\n});"
-            }
-            else {
-                return "\(isInClass ? "static ":"const ")\(name) = { type: 'enum', value: Object.freeze({\n  \(cases)\n}) };"
-            }
+        if !managedRuntime {
+            return "\(isInClass ? "static ":"const ")\(name) = Object.freeze({\n  \(cases)\n});"
+        }
+        else {
+            return "\(isInClass ? "static ":"const ")\(name) = { type: 'enum', value: Object.freeze({\n  \(cases)\n}) };"
         }
     }
 
@@ -182,11 +169,7 @@ struct JSTranspiler: Transpiler {
         let name = transpileIdentifier(node.name.value)
         let members = node.members.map { transpileNode($0, isInClass: true) }.joined(separator: "\n  ")
         
-        if emitTS {
-            return "interface \(name) {\n  \(members)\n}"
-        } else {
-            return "class \(name) {\n  \(members)\n}"
-        }
+        return "class \(name) {\n  \(members)\n}"
     }
 
     private func transpileTypealias(_ node: TypealiasDeclaration) -> String {
@@ -213,7 +196,7 @@ struct JSTranspiler: Transpiler {
         if let elseBranchNode = node.elseBranch {
             elseBranch = " else { \(transpileNode(elseBranchNode)) }"
         }
-        if minimalRuntime {
+        if !managedRuntime {
             let assignment = name == value ? "" : "const \(name) = \(value); "
             return "if (\(value) !== undefined && \(value) !== null) { \(assignment)\(thenBranch) }\(elseBranch)"
         }
@@ -251,9 +234,26 @@ struct JSTranspiler: Transpiler {
 
     private func transpileFor(_ node: ForStatement) -> String {
         let variable = transpileIdentifier(node.variable.value)
-        let iterable = transpileExpression(node.iterable)
         let body = transpileBlock(node.body as! BlockStatement)
-        return "for (const \(variable) of \(iterable)) { \(body) }"
+
+        if let iterable = node.iterable as? BinaryRangeExpression {
+            let left = transpileExpression(iterable.left)
+            let right = transpileExpression(iterable.right)
+            
+            switch iterable.op {
+            case .DOT_DOT_DOT:
+                return "for (let \(variable) = \(left); \(variable) <= \(right); \(variable)++) { \(body) }"
+            case .DOT_DOT_LESS:
+                return "for (let \(variable) = \(left); \(variable) < \(right); \(variable)++) { \(body) }"
+            default:
+                let op = transpileOperator(iterable.op)
+                return "\(left) \(op) \(right)"
+            }
+        }
+        else {
+            let iterable = transpileExpression(node.iterable)
+            return "for (const \(variable) of \(iterable)) { \(body) }"
+        }
     }
 
     private func transpileWhile(_ node: WhileStatement) -> String {
@@ -291,7 +291,7 @@ struct JSTranspiler: Transpiler {
     private func transpileDoCatch(_ node: DoCatchStatement) -> String {
         let body = transpileBlock(node.body as! BlockStatement)
         let catchBlock = transpileBlock(node.catchBlock as! BlockStatement)
-        return "try { \(body) } catch { \(catchBlock) }"
+        return "try { \(body) } catch (error) { \(catchBlock) }"
     }
 
     private func transpileThrow(_ node: ThrowStatement) -> String {
@@ -327,8 +327,6 @@ struct JSTranspiler: Transpiler {
             return transpileBinary(node)
         case let node as LogicalExpression:
             return transpileLogical(node)
-        case let node as BinaryRangeExpression:
-            return transpileBinaryRange(node)
         case let node as UnaryExpression:
             return transpileUnary(node)
         case let node as CallExpression:
@@ -403,21 +401,6 @@ struct JSTranspiler: Transpiler {
         return "\(left) \(op) \(right)"
     }
 
-    private func transpileBinaryRange(_ node: BinaryRangeExpression) -> String {
-        let left = transpileExpression(node.left)
-        let right = transpileExpression(node.right)
-        
-        switch node.op {
-        case .DOT_DOT_DOT:
-            return ".slice(\(left), \(right) + 1)"
-        case .DOT_DOT_LESS:
-            return ".slice(\(left), \(right))"
-        default:
-            let op = transpileOperator(node.op)
-            return "\(left) \(op) \(right)"
-        }
-    }
-
     private func transpileUnary(_ node: UnaryExpression) -> String {
         let operand = transpileExpression(node.operand)
         let op = transpileOperator(node.op)
@@ -471,12 +454,12 @@ struct JSTranspiler: Transpiler {
         var args = ""
         
         if node.arguments.count > 0 {
-            let inner = node.arguments.map { arg in
+            let inner = node.arguments.enumerated().map { index, arg in
                 if let label = arg.label {
                     return "\(label.value): \(transpileExpression(arg.value))"
                 }
                 else {
-                    return "_: \(transpileExpression(arg.value))"
+                    return "_\(index + 1): \(transpileExpression(arg.value))"
                 }
             }.joined(separator: ", ")
             
@@ -484,13 +467,16 @@ struct JSTranspiler: Transpiler {
             args = "{ \(inner) }" //node.arguments.contains(where: { $0.label != nil }) ? "{ \(args) }" : args
         }
         
-        let isInit = node.isInitializer
+        if node.isInitializer {
+            if managedRuntime {
+                callee = callee.hasSuffix(".value") ? String(callee.dropLast(6)) : callee
+            }
 
-        if !minimalRuntime && isInit {
-            callee = callee.hasSuffix(".value") ? String(callee.dropLast(6)) : callee
+            return "(new \(callee)(\(args)))"
         }
-
-        return "\(isInit ? "new " : "")\(callee)(\(args))"
+        else {
+            return "\(callee)(\(args))"
+        }
     }
 
     private func transpileGet(_ node: GetExpression) -> String {
@@ -503,9 +489,24 @@ struct JSTranspiler: Transpiler {
         let object = transpileExpression(node.object)
         let index = transpileExpression(node.index)
         if let rangeIndex = node.index as? BinaryRangeExpression {
-            return "\(object)\(transpileBinaryRange(rangeIndex))"
+            return "\(object)\(transpileBinaryRangeIndex(rangeIndex))"
         } else {
             return "\(object)[\(index)]"
+        }
+    }
+
+    private func transpileBinaryRangeIndex(_ node: BinaryRangeExpression) -> String {
+        let left = transpileExpression(node.left)
+        let right = transpileExpression(node.right)
+        
+        switch node.op {
+        case .DOT_DOT_DOT:
+            return ".slice(\(left), \(right) + 1)"
+        case .DOT_DOT_LESS:
+            return ".slice(\(left), \(right))"
+        default:
+            let op = transpileOperator(node.op)
+            return "\(left) \(op) \(right)"
         }
     }
 
@@ -576,7 +577,7 @@ struct JSTranspiler: Transpiler {
     }
 
     private func transpileVariable(_ node: VariableExpression) -> String {
-        if minimalRuntime { 
+        if !managedRuntime { 
             return "\(transpileIdentifier(node.name.value))"
         }
         else {

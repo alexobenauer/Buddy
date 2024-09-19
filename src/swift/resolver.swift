@@ -257,13 +257,13 @@ class Resolver {
         
         beginScope(Scope(type: ScopeType.ENUM))
         
-        for (index, case_) in node.cases.enumerated() {
+        for (case_index, case_) in node.cases.enumerated() {
             if let rawValue = case_.rawValue {
-                newNode.cases[index].rawValue = try resolveNode(rawValue)
+                newNode.cases[case_index].rawValue = try resolveNode(rawValue)
             }
 
             for (index, associatedValue) in case_.associatedValues.enumerated() {
-                newNode.cases[index].associatedValues[index] = try resolveParameter(associatedValue)
+                newNode.cases[case_index].associatedValues[index] = try resolveParameter(associatedValue)
             }
         }
         
@@ -594,7 +594,7 @@ class Resolver {
     }
 
     private func resolveVariableExpression(_ node: VariableExpression) throws -> VariableExpression {
-        var newNode = node
+        let newNode = node
 
         // TODO: Check if the variable is declared in the current scope
         // and mark it as used
