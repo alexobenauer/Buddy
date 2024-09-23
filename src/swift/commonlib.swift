@@ -35,6 +35,10 @@ func runtime(managedRuntime: Bool) -> String {
                 throw new Error("Fatal error: force try failed with error: " + error);
             }
         }
+        
+        function isUndefinedOrNull(value) {
+            return value === undefined || value === null;
+        }
         """,
     
         // Functions available to user Swift code, providing both JS and Swift implementations so the transpiler can be built in Swift
@@ -43,7 +47,9 @@ func runtime(managedRuntime: Bool) -> String {
         
         // Functions available to user Swift code, only JS implementation provided
         makeFunction(stringifyJS, managedRuntime: managedRuntime),
-        makeFunction(printJS, managedRuntime: managedRuntime)
+        makeFunction(printJS, managedRuntime: managedRuntime),
+        makeFunction(intJS, managedRuntime: managedRuntime),
+        makeFunction(doubleJS, managedRuntime: managedRuntime)
     ].joined(separator: "\n")
 }
 
@@ -86,6 +92,16 @@ console.log(arg);
 //(...args) {
 //  console.log(...args);
 //}
+""")
+
+let intJS = JSFunctionDeclaration(name: "Int", body: """
+const { _1: arg } = params;
+return parseInt(arg);
+""")
+
+let doubleJS = JSFunctionDeclaration(name: "Double", body: """
+const { _1: arg } = params;
+return parseFloat(arg);
 """)
 
 func substr(_ str: String, start: Int, end: Int) -> String {

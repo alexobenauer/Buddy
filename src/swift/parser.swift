@@ -38,7 +38,7 @@ class Parser {
                 return try self.function(FunctionDeclaration.Kind.initializer, isPrivate: isPrivate, attributes: attributes)
             }
             if self.match(TokenType.VAR, TokenType.LET) {
-                return try varDeclaration(isPrivate: isPrivate)
+                return try self.varDeclaration(isPrivate: isPrivate)
             }
             if self.match(TokenType.FUNC) { 
                 return try self.function(
@@ -144,8 +144,8 @@ class Parser {
                 methods.append(try self.function(FunctionDeclaration.Kind.method, isPrivate: isPrivate, attributes: attributes))
             }
             else if self.match(TokenType.VAR, TokenType.LET) {
-                properties.append(try varDeclaration(isPrivate: isPrivate))
-            } 
+                properties.append(try self.varDeclaration(isPrivate: isPrivate))
+            }
             else {
                 throw self.error(self.peek(), "Expect method or property declaration in class.")
             }
@@ -1039,8 +1039,9 @@ class Parser {
     }
     
     func error(_ token: Token, _ message: String) -> Error {
-        print("Error at '\(token.value)', line \(token.line), column \(token.column): \(message)")
+        print("Error at '\(token.value)' (\(token.type)), line \(token.line), column \(token.column): \(message)")
         print(token.value)
+        print(token.type)
         print(token.line)
         print(token.column)
         print(message)

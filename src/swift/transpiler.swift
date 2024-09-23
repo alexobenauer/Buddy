@@ -125,7 +125,7 @@ struct JSTranspiler: Transpiler {
         // But we may need to do that in the resolver
 
         let name = node.name.value == "init" ? "constructor" : transpileIdentifier(node.name.value)
-        let params = "params = {}"
+        let params = node.parameters.count > 0 ? "params = {}" : ""
         let paramsInBody = transpileParamsIntoBody(node.parameters)
         let bodyBlock = transpileBlock(node.body)
         let body = "\(paramsInBody)\n\(bodyBlock)"
@@ -137,16 +137,39 @@ struct JSTranspiler: Transpiler {
 
     private func transpileParamsIntoBody(_ parameters: [Parameter]) -> String {
         if parameters.count == 0 { return "" }
+
+        let nonVariadicParams = parameters.filter({ !$0.isVariadic })
         
-        let paramDestructuring = parameters.enumerated().map { index, param in
+        let paramDestructuring = nonVariadicParams.enumerated().map { index, param in
             let externalName = param.externalName?.value ?? param.internalName.value
             let internalName = param.internalName.value
             let adjustedExternalName = externalName == "_" ? "_\(index + 1)" : externalName
             let defaultValue = param.defaultValue != nil ? " = \(transpileExpression(param.defaultValue!))" : ""
             return adjustedExternalName == internalName ? "\(internalName)\(defaultValue)" : "\(adjustedExternalName): \(internalName)\(defaultValue)"
         }.joined(separator: ", ")
+
+        // For variadic params, we need to get all the arguments after the last non-variadic param and roll them up into an array
+        var variadicParam = ""
+        if parameters.last!.isVariadic {
+            variadicParam = """
+            const \(parameters.last!.internalName.value) = Object.entries(params)
+                .map(([key, value]) => ({ key, value }))
+                .filter(({ key }) => key.startsWith('_'))
+                .map(({ key, value }) => ({ key, value, position: parseInt(key.split('_')[1]) }))
+                .sort((a, b) => a.position - b.position)
+                .filter(({ position }) => position > '\(parameters.count - 1)')
+                .map(({ value }) => value);
+            """
+        }
+
+        // TODO: This only supports one variadic param for now; can add support for more
         
-        return "const { \(paramDestructuring) } = params;"
+        if nonVariadicParams.count > 0 {
+            return "const { \(paramDestructuring) } = params;\n\(variadicParam)"
+        }
+        else {
+            return variadicParam
+        }
     }
 
     private func transpileEnumDeclaration(_ node: EnumDeclaration, isInClass: Bool = false) -> String {
@@ -196,13 +219,15 @@ struct JSTranspiler: Transpiler {
         if let elseBranchNode = node.elseBranch {
             elseBranch = " else { \(transpileNode(elseBranchNode)) }"
         }
+        // Must pass through isUndefinedOrNullJS rather than comparing to both, since value might be a function call, and calling it twice would have side effects
         if !managedRuntime {
-            let assignment = name == value ? "" : "const \(name) = \(value); "
-            return "if (\(value) !== undefined && \(value) !== null) { \(assignment)\(thenBranch) }\(elseBranch)"
+            let assignment = name == value ? "" : "const \(name) = __\(name); "
+            return "const __\(name) = \(value); if (!isUndefinedOrNull(__\(name))) { \(assignment)\(thenBranch) }\(elseBranch)"
         }
         else {
+            // TODO: Update to match above
             let assignment = name == value ? "" : "const \(name) = { value: \(value) }; "
-            return "if (\(value) !== undefined && \(value) !== null) { \(assignment)\(thenBranch) }\(elseBranch)"
+            return "if (!isUndefinedOrNull(\(name))) { \(assignment)\(thenBranch) }\(elseBranch)"
         }
     }
 
